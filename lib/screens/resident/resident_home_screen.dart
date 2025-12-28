@@ -12,6 +12,7 @@ import 'resident_settings_screen.dart';
 import 'resident_sos_history_screen.dart';
 import 'resident_emergency_contacts_screen.dart';
 import 'resident_complaints_screen.dart';
+import 'simple_qr_scanner.dart';
 
 class ResidentHomeScreen extends StatelessWidget {
   final UserModel user;
@@ -210,7 +211,7 @@ class ResidentHomeScreen extends StatelessWidget {
             case 'scan_qr':
               Navigator.push(
                 context,
-                MaterialPageRoute(builder: (context) => const ResidentQRScannerScreen()),
+                MaterialPageRoute(builder: (context) => const SimpleQRScanner()),
               );
               break;
           }

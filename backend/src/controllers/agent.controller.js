@@ -218,6 +218,64 @@ exports.getProfile = async (req, res) => {
   }
 };
 
+exports.verifyQR = async (req, res) => {
+  try {
+    console.log('📱 POST /api/agents/verify-qr called');
+    console.log('📦 Request body:', JSON.stringify(req.body));
+    
+    // Extract QR data from request body
+    const qrData = req.body;
+    
+    if (!qrData || !qrData.id || !qrData.email) {
+      console.log('❌ Missing required fields in QR data');
+      return res.status(400).json({ 
+        success: false,
+        error: 'Invalid QR code: missing required fields (id, email)' 
+      });
+    }
+
+    // Find agent by ID or email
+    const agent = await Agent.findOne({ 
+      $or: [
+        { id: qrData.id },
+        { email: qrData.email }
+      ]
+    });
+    
+    if (!agent) {
+      console.log(`❌ Agent not found: ${qrData.email}`);
+      return res.status(404).json({ 
+        success: false,
+        error: 'Agent not found in database' 
+      });
+    }
+
+    console.log(`✅ Agent verified: ${agent.name} (${agent.email})`);
+
+    // Return agent details as JSON ONLY (no HTML, no redirects)
+    return res.status(200).json({
+      success: true,
+      agent: {
+        id: agent.id,
+        name: agent.name,
+        email: agent.email,
+        phone: agent.phone,
+        company: agent.company,
+        verified: agent.verified,
+        score: agent.score || 0,
+        documentsUploaded: agent.documentsUploaded || false,
+        serviceType: agent.serviceType || 'General'
+      }
+    });
+  } catch (error) {
+    console.error('❌ Error in verifyQR:', error);
+    return res.status(500).json({ 
+      success: false,
+      error: error.message 
+    });
+  }
+};
+
 exports.updateProfile = async (req, res) => {
   res.json({ status: 'success', message: 'Update profile - Coming soon' });
 };

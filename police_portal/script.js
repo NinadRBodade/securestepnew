@@ -1,8 +1,8 @@
 // Police Dashboard - Real-time SOS Alert System
 // Configuration
 const CONFIG = {
-    API_BASE_URL: 'http://10.20.210.17:5001/api',
-    SOCKET_URL: 'http://10.20.210.17:5001',
+    API_BASE_URL: 'http://10.156.78.17:5001/api',
+    SOCKET_URL: 'http://10.156.78.17:5001',
     DEFAULT_CENTER: [19.0760, 72.8777], // Mumbai coordinates
     DEFAULT_ZOOM: 12
 };

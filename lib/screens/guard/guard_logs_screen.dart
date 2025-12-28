@@ -46,7 +46,7 @@ class _GuardEntryLogsScreenState extends State<GuardEntryLogsScreen> {
     
     try {
       final response = await http.get(
-        Uri.parse('${AppConstants.baseUrl}/api/v1/guard/entry-logs'),
+        Uri.parse('${AppConstants.baseUrl}/api/guards/entry-logs'),
         headers: {
           'Authorization': 'Bearer $_token',
           'Content-Type': 'application/json',
@@ -136,3 +136,4 @@ class _GuardEntryLogsScreenState extends State<GuardEntryLogsScreen> {
     );
   }
 }
+

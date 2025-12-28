@@ -132,6 +132,14 @@ class _AgentQRScreenState extends State<AgentQRScreen> {
     
     // Create QR data
     final qrData = jsonEncode(agentInfo);
+    
+    // DEBUG: Print QR data
+    print('=' * 80);
+    print('🔷 AGENT QR CODE DATA:');
+    print('Raw JSON: $qrData');
+    print('Length: ${qrData.length} characters');
+    print('Agent Info: $agentInfo');
+    print('=' * 80);
 
     return SingleChildScrollView(
       padding: const EdgeInsets.all(AppConstants.paddingLarge),

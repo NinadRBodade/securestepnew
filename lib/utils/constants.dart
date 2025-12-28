@@ -1,12 +1,22 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
+import 'dart:io' show Platform;
 
 // App-wide constants for colors, text styles, and values
 class AppConstants {
   // API Configuration
-  // Change this to your computer's IP address or deployed backend URL
-  // static const String baseUrl = 'http://10.0.2.2:5001'; // For Android Emulator
-  static const String baseUrl = 'http://localhost:5001'; // For Chrome/Web browser
-  // static const String baseUrl = 'https://your-backend.herokuapp.com'; // For Production
+  // Automatically uses the correct URL based on platform
+  static String get baseUrl {
+    if (kIsWeb) {
+      // For Web browser (Chrome, etc.)
+      return 'http://localhost:5001';
+    } else {
+      // For Mobile devices (Android/iOS) - use your computer's WiFi IP
+      // Your computer IP: 10.156.78.17 (Wi-Fi)
+      // Make sure your phone is connected to the same WiFi network
+      return 'http://10.156.78.17:5001';
+    }
+  }
   
   static const String apiVersion = '/api';
   

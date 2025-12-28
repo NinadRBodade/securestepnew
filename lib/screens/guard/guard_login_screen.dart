@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:ui';
 import '../../utils/validators.dart';
+import '../../utils/constants.dart';
 import '../../config/api_config.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
@@ -69,7 +70,7 @@ class _GuardLoginScreenState extends State<GuardLoginScreen> with SingleTickerPr
       final isEmail = identifier.contains('@');
       
       final response = await http.post(
-        Uri.parse('http://localhost:5001/api/auth/login'),
+        Uri.parse('${AppConstants.baseUrl}/api/auth/login'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({
           'email': isEmail ? identifier : null,

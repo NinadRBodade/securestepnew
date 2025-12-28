@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test QR Generator</title>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/qrcodejs/1.0.0/qrcode.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            text-align: center;
+            background: #f5f5f5;
+        }
+        .container {
+            background: white;
+            padding: 30px;
+            border-radius: 12px;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.1);
+        }
+        h1 { color: #333; margin-bottom: 20px; }
+        #qr-container {
+            margin: 30px auto;
+            display: inline-block;
+            padding: 20px;
+            background: white;
+            border: 2px solid #ddd;
+            border-radius: 8px;
+        }
+        .info-box {
+            background: #f0f9ff;
+            border: 1px solid #0ea5e9;
+            border-radius: 8px;
+            padding: 15px;
+            margin: 20px 0;
+            text-align: left;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #0c4a6e;
+        }
+        .info-box p {
+            margin: 8px 0;
+            font-family: monospace;
+            font-size: 12px;
+            word-break: break-all;
+        }
+        button {
+            background: #0ea5e9;
+            color: white;
+            border: none;
+            padding: 12px 30px;
+            border-radius: 6px;
+            font-size: 16px;
+            cursor: pointer;
+            margin: 10px;
+        }
+        button:hover {
+            background: #0284c7;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔍 QR Code Test Generator</h1>
+        <p>Test QR code generation for agent verification</p>
+        
+        <button onclick="generateTestQR()">Generate Test QR Code</button>
+        
+        <div id="qr-container"></div>
+        
+        <div class="info-box" id="info-box" style="display: none;">
+            <h3>📋 QR Data Preview:</h3>
+            <p id="qr-data-display"></p>
+        </div>
+        
+        <div style="margin-top: 20px;">
+            <p><strong>Instructions:</strong></p>
+            <ol style="text-align: left; max-width: 500px; margin: 20px auto;">
+                <li>Click "Generate Test QR Code" button</li>
+                <li>Scan the QR code with your phone app</li>
+                <li>Check if it works correctly</li>
+                <li>The QR data preview shows exactly what's encoded</li>
+            </ol>
+        </div>
+    </div>
+
+    <script>
+        let qrcode = null;
+
+        function generateTestQR() {
+            // Clear previous QR code
+            const qrContainer = document.getElementById('qr-container');
+            qrContainer.innerHTML = '';
+            
+            // Create test agent data
+            const testAgent = {
+                id: "test_agent_123",
+                name: "Test Agent",
+                email: "test@example.com",
+                company: "Test Company",
+                verified: true,
+                score: 85,
+                timestamp: new Date().toISOString()
+            };
+            
+            // Convert to JSON string
+            const qrData = JSON.stringify(testAgent);
+            
+            // Display the data
+            document.getElementById('qr-data-display').textContent = qrData;
+            document.getElementById('info-box').style.display = 'block';
+            
+            // Generate QR code
+            qrcode = new QRCode(qrContainer, {
+                text: qrData,
+                width: 300,
+                height: 300,
+                colorDark: '#000000',
+                colorLight: '#ffffff',
+                correctLevel: QRCode.CorrectLevel.H
+            });
+            
+            console.log('✅ QR Code generated with data:', testAgent);
+        }
+        
+        // Auto-generate on page load
+        window.addEventListener('DOMContentLoaded', generateTestQR);
+    </script>
+</body>
+</html>

@@ -1,7 +1,7 @@
 // Agent Verification Portal - JavaScript
 // Configuration
 const CONFIG = {
-    API_BASE_URL: 'http://localhost:5001/api',
+    API_BASE_URL: 'http://10.156.78.17:5001/api',
     DEFAULT_SCORE: 75
 };
 

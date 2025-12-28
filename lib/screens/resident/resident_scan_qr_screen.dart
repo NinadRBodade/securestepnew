@@ -45,38 +45,87 @@ class _ResidentScanQRScreenState extends State<ResidentScanQRScreen> {
     final List<Barcode> barcodes = capture.barcodes;
     
     for (final barcode in barcodes) {
-      final String? code = barcode.rawValue;
+      final String? qrData = barcode.rawValue;
       
-      if (code != null) {
-        setState(() {
-          _isScanning = false;
-        });
-        
-        // Parse QR data
-        try {
-          final qrData = jsonDecode(code);
-          
-          // Check if online or offline
-          final online = await _offlineService.isOnline();
-          setState(() => _isOnline = online);
-          
-          if (online) {
-            // ONLINE: Use old flow (fetch from backend)
-            _fetchAgentDetailsOnline(qrData);
-          } else {
-            // OFFLINE: Verify locally
-            _verifyAgentOffline(qrData);
-          }
-          
-        } catch (e) {
-          // Invalid QR code
-          _showErrorDialog('Invalid QR Code', 'This is not a valid agent QR code.');
-          setState(() {
-            _isScanning = true;
-          });
-        }
-        break;
+      if (qrData == null || qrData.isEmpty) continue;
+      
+      setState(() => _isScanning = false);
+      
+      // DEBUG LOGGING
+      print('=' * 80);
+      print('📷 RESIDENT QR SCAN:');
+      print('Length: ${qrData.length}');
+      print('Data: ${qrData.substring(0, qrData.length > 200 ? 200 : qrData.length)}');
+      print('=' * 80);
+      
+      // Process the QR code
+      await _processQRCode(qrData);
+      break;
+    }
+  }
+
+  Future<void> _processQRCode(String qrData) async {
+    try {
+      // Validate: Check for HTML
+      if (qrData.trim().startsWith('<!DOCTYPE') || qrData.trim().startsWith('<html')) {
+        _showErrorDialog(
+          'Invalid QR Code', 
+          'This appears to be HTML, not a QR code.\n\nMake sure you are scanning the QR CODE IMAGE itself.'
+        );
+        setState(() => _isScanning = true);
+        return;
       }
+      
+      // Validate: Check for URL
+      if (qrData.startsWith('http://') || qrData.startsWith('https://')) {
+        _showErrorDialog(
+          'Invalid QR Code', 
+          'This is a URL, not agent data.\n\nThe QR code must contain JSON data.'
+        );
+        setState(() => _isScanning = true);
+        return;
+      }
+      
+      // Parse JSON
+      Map<String, dynamic> agentData;
+      try {
+        agentData = json.decode(qrData);
+      } catch (e) {
+        print('❌ JSON parse error: $e');
+        _showErrorDialog(
+          'Invalid Format', 
+          'Could not read QR code data.\n\nPlease try scanning again.'
+        );
+        setState(() => _isScanning = true);
+        return;
+      }
+      
+      // Validate required fields
+      if (!agentData.containsKey('id') || !agentData.containsKey('name') || !agentData.containsKey('email')) {
+        _showErrorDialog(
+          'Invalid QR Code', 
+          'This QR code is missing required information.\n\nPlease scan a valid agent QR code.'
+        );
+        setState(() => _isScanning = true);
+        return;
+      }
+      
+      print('✅ Parsed: ${agentData['name']} (${agentData['email']})');
+      
+      // Check connectivity
+      final online = await _offlineService.isOnline();
+      setState(() => _isOnline = online);
+      
+      if (online) {
+        _fetchAgentDetailsOnline(agentData);
+      } else {
+        _verifyAgentOffline(agentData);
+      }
+      
+    } catch (e) {
+      print('❌ Error processing QR: $e');
+      _showErrorDialog('Error', 'Failed to process QR code: $e');
+      setState(() => _isScanning = true);
     }
   }
 
@@ -125,11 +174,11 @@ class _ResidentScanQRScreenState extends State<ResidentScanQRScreen> {
   }
 
   Future<void> _fetchAgentDetailsOnline(Map<String, dynamic> qrData) async {
-    // Validate QR code structure
-    final agentId = qrData['id'] ?? qrData['agentId'];
+    // Extract agent ID from QR data
+    final agentId = qrData['id'];
     
     if (agentId == null) {
-      _showErrorDialog('Invalid QR Code', 'This is not a valid agent QR code.');
+      _showErrorDialog('Invalid QR Code', 'Agent ID is missing from QR code.');
       setState(() {
         _isScanning = true;
       });
@@ -146,38 +195,115 @@ class _ResidentScanQRScreenState extends State<ResidentScanQRScreen> {
     );
 
     try {
-      final response = await http.get(
-        Uri.parse('${AppConstants.baseUrl}/api/agent/$agentId'),
+      print('🔍 Verifying agent QR with ID: $agentId');
+      print('🌐 API URL: ${AppConstants.baseUrl}/api/verify-agent');
+      print('📋 Scanned QR String: ${json.encode(qrData)}');
+      
+      // Send QR data to backend for verification
+      final response = await http.post(
+        Uri.parse('${AppConstants.baseUrl}/api/verify-agent'),
+        headers: {
+          'Accept': 'application/json',
+          'Content-Type': 'application/json',
+        },
+        body: json.encode(qrData), // Send entire QR data to backend
+      ).timeout(
+        Duration(seconds: 10),
+        onTimeout: () {
+          throw Exception('Connection timeout');
+        },
       );
 
+      print('📡 Status: ${response.statusCode}');
+      print('📝 Full Response Body: ${response.body}');
+      print('📋 Content-Type: ${response.headers['content-type']}');
+      print('🔍 Response length: ${response.body.length} chars');
+
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
+      Navigator.pop(context);
+
+      // Check if response is HTML (BUG in backend)
+      if (response.body.trim().startsWith('<!DOCTYPE') || response.body.trim().startsWith('<html')) {
+        print('❌ BACKEND BUG: Server returned HTML instead of JSON');
+        print('❌ Full HTML Response: ${response.body}');
+        _showErrorDialog(
+          'Server Configuration Error',
+          'Backend returned HTML instead of JSON.\n\nThis is a backend bug that must be fixed.\n\nAPI: POST /api/verify-agent\nExpected: JSON\nReceived: HTML\n\nCheck backend logs!',
+        );
+        setState(() {
+          _isScanning = true;
+        });
+        return;
+      }
 
       if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final agentData = data['agent'];
+        final contentType = response.headers['content-type'] ?? '';
+        
+        // Validate JSON response
+        if (!contentType.contains('application/json')) {
+          print('❌ Invalid Content-Type: $contentType');
+          throw Exception('Server returned non-JSON content-type: $contentType');
+        }
 
-        // Navigate to result screen with full agent details
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AgentVerificationResultScreen(
-              agentData: agentData,
-              isOffline: false,
+        final data = json.decode(response.body) as Map<String, dynamic>;
+        
+        if (data['success'] == true && data.containsKey('agent')) {
+          final agentData = data['agent'] as Map<String, dynamic>;
+          print('✅ Agent verified: ${agentData['name']}');
+
+          // Navigate to result screen
+          Navigator.pushReplacement(
+            context,
+            MaterialPageRoute(
+              builder: (context) => AgentVerificationResultScreen(
+                agentData: agentData,
+                isOffline: false,
+              ),
             ),
-          ),
+          );
+        } else {
+          throw Exception(data['message'] ?? 'Agent not found');
+        }
+      } else if (response.statusCode == 404) {
+        _showErrorDialog(
+          'Agent Not Found', 
+          'No agent registered with this email.\n\nThe agent may need to register first.',
         );
+        setState(() {
+          _isScanning = true;
+        });
       } else {
-        final error = json.decode(response.body);
-        _showErrorDialog('Agent Not Found', error['error'] ?? 'Could not verify agent');
+        print('❌ HTTP Error ${response.statusCode}');
+        
+        String errorMessage = 'Failed to fetch agent details';
+        try {
+          final error = json.decode(response.body) as Map<String, dynamic>;
+          errorMessage = error['message'] ?? error['error'] ?? errorMessage;
+        } catch (e) {
+          // Ignore parse error
+        }
+        
+        _showErrorDialog('Error', errorMessage);
         setState(() {
           _isScanning = true;
         });
       }
     } catch (e) {
+      print('❌ Exception: $e');
+      
       if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      _showErrorDialog('Connection Error', 'Could not connect to server. Please check your internet connection.');
+      Navigator.pop(context);
+      
+      String errorMessage = 'Network error';
+      if (e.toString().contains('timeout')) {
+        errorMessage = 'Connection timeout - please check your internet';
+      } else if (e.toString().contains('SocketException')) {
+        errorMessage = 'Cannot connect to server - is backend running?';
+      } else {
+        errorMessage = e.toString().replaceAll('Exception: ', '');
+      }
+      
+      _showErrorDialog('Connection Error', errorMessage);
       setState(() {
         _isScanning = true;
       });
@@ -185,51 +311,8 @@ class _ResidentScanQRScreenState extends State<ResidentScanQRScreen> {
   }
 
   Future<void> _fetchAgentDetails(String agentId) async {
-    // Show loading
-    showDialog(
-      context: context,
-      barrierDismissible: false,
-      builder: (context) => const Center(
-        child: CircularProgressIndicator(),
-      ),
-    );
-
-    try {
-      final response = await http.get(
-        Uri.parse('${AppConstants.baseUrl}/api/agent/$agentId'),
-      );
-
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-
-      if (response.statusCode == 200) {
-        final data = json.decode(response.body);
-        final agentData = data['agent'];
-
-        // Navigate to result screen with full agent details
-        Navigator.pushReplacement(
-          context,
-          MaterialPageRoute(
-            builder: (context) => AgentVerificationResultScreen(
-              agentData: agentData,
-            ),
-          ),
-        );
-      } else {
-        final error = json.decode(response.body);
-        _showErrorDialog('Agent Not Found', error['error'] ?? 'Could not verify agent');
-        setState(() {
-          _isScanning = true;
-        });
-      }
-    } catch (e) {
-      if (!mounted) return;
-      Navigator.pop(context); // Close loading dialog
-      _showErrorDialog('Connection Error', 'Could not connect to server. Please check your internet connection.');
-      setState(() {
-        _isScanning = true;
-      });
-    }
+    setState(() => _isScanning = false);
+    await _fetchAgentDetailsOnline({'email': agentId});
   }
 
   void _showErrorDialog(String title, String message) {
@@ -240,7 +323,9 @@ class _ResidentScanQRScreenState extends State<ResidentScanQRScreen> {
         content: Text(message),
         actions: [
           TextButton(
-            onPressed: () => Navigator.pop(context),
+            onPressed: () {
+              Navigator.pop(context);
+            },
             child: const Text('OK'),
           ),
         ],
@@ -253,184 +338,43 @@ class _ResidentScanQRScreenState extends State<ResidentScanQRScreen> {
     return Scaffold(
       appBar: AppBar(
         title: const Text('Scan Agent QR'),
-        actions: [
-          // Network status indicator
-          Padding(
-            padding: const EdgeInsets.symmetric(horizontal: 8),
-            child: Center(
-              child: Container(
-                padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 6),
-                decoration: BoxDecoration(
-                  color: _isOnline ? Colors.green.shade50 : Colors.red.shade50,
-                  borderRadius: BorderRadius.circular(16),
-                  border: Border.all(
-                    color: _isOnline ? Colors.green : Colors.red,
-                    width: 1.5,
-                  ),
-                ),
-                child: Row(
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Icon(
-                      _isOnline ? Icons.cloud_done : Icons.cloud_off,
-                      size: 16,
-                      color: _isOnline ? Colors.green : Colors.red,
-                    ),
-                    const SizedBox(width: 4),
-                    Text(
-                      _isOnline ? 'Online' : 'Offline',
-                      style: TextStyle(
-                        fontSize: 12,
-                        fontWeight: FontWeight.bold,
-                        color: _isOnline ? Colors.green.shade900 : Colors.red.shade900,
-                      ),
-                    ),
-                  ],
-                ),
-              ),
-            ),
-          ),
-          // Torch toggle
-          IconButton(
-            icon: Icon(
-              cameraController.torchEnabled ? Icons.flash_on : Icons.flash_off,
-            ),
-            onPressed: () {
-              cameraController.toggleTorch();
-              setState(() {});
-            },
-          ),
-        ],
+        backgroundColor: AppConstants.primaryColor,
       ),
       body: Stack(
         children: [
-          // Camera view
           MobileScanner(
-            controller: cameraController,
             onDetect: _onQRScanned,
           ),
-          
-          // Overlay with instructions
-          _buildOverlay(),
-        ],
-      ),
-    );
-  }
-
-  Widget _buildOverlay() {
-    return Column(
-      children: [
-        Expanded(
-          flex: 1,
-          child: Container(
-            color: Colors.black.withOpacity(0.5),
-          ),
-        ),
-        
-        // Scanner frame
-        Container(
-          height: 300,
-          child: Row(
-            children: [
-              Expanded(
-                child: Container(
-                  color: Colors.black.withOpacity(0.5),
-                ),
-              ),
-              Container(
-                width: 300,
+          if (!_isOnline)
+            Positioned(
+              top: 16,
+              left: 16,
+              right: 16,
+              child: Container(
+                padding: const EdgeInsets.all(12),
                 decoration: BoxDecoration(
-                  border: Border.all(
-                    color: AppConstants.primaryColor,
-                    width: 3,
-                  ),
-                  borderRadius: BorderRadius.circular(12),
+                  color: Colors.orange.shade600,
+                  borderRadius: BorderRadius.circular(8),
                 ),
-                child: Stack(
+                child: const Row(
                   children: [
-                    // Corner decorations
-                    _buildCorner(Alignment.topLeft),
-                    _buildCorner(Alignment.topRight),
-                    _buildCorner(Alignment.bottomLeft),
-                    _buildCorner(Alignment.bottomRight),
-                  ],
-                ),
-              ),
-              Expanded(
-                child: Container(
-                  color: Colors.black.withOpacity(0.5),
-                ),
-              ),
-            ],
-          ),
-        ),
-        
-        Expanded(
-          flex: 1,
-          child: Container(
-            color: Colors.black.withOpacity(0.5),
-            child: Center(
-              child: Padding(
-                padding: const EdgeInsets.all(20.0),
-                child: Column(
-                  mainAxisAlignment: MainAxisAlignment.center,
-                  children: [
-                    Icon(
-                      Icons.qr_code_scanner,
-                      color: Colors.white,
-                      size: 48,
-                    ),
-                    const SizedBox(height: 16),
-                    const Text(
-                      'Position QR code within the frame',
-                      style: TextStyle(
-                        color: Colors.white,
-                        fontSize: 16,
-                        fontWeight: FontWeight.w500,
+                    Icon(Icons.cloud_off, color: Colors.white, size: 20),
+                    SizedBox(width: 8),
+                    Expanded(
+                      child: Text(
+                        'OFFLINE MODE - Using cached data',
+                        style: TextStyle(
+                          color: Colors.white,
+                          fontSize: 14,
+                          fontWeight: FontWeight.w500,
+                        ),
                       ),
-                      textAlign: TextAlign.center,
-                    ),
-                    const SizedBox(height: 8),
-                    const Text(
-                      'Scan the agent\'s QR code to verify their identity',
-                      style: TextStyle(
-                        color: Colors.white70,
-                        fontSize: 14,
-                      ),
-                      textAlign: TextAlign.center,
                     ),
                   ],
                 ),
               ),
             ),
-          ),
-        ),
-      ],
-    );
-  }
-
-  Widget _buildCorner(Alignment alignment) {
-    return Align(
-      alignment: alignment,
-      child: Container(
-        width: 30,
-        height: 30,
-        decoration: BoxDecoration(
-          border: Border(
-            top: alignment == Alignment.topLeft || alignment == Alignment.topRight
-                ? BorderSide(color: Colors.white, width: 4)
-                : BorderSide.none,
-            bottom: alignment == Alignment.bottomLeft || alignment == Alignment.bottomRight
-                ? BorderSide(color: Colors.white, width: 4)
-                : BorderSide.none,
-            left: alignment == Alignment.topLeft || alignment == Alignment.bottomLeft
-                ? BorderSide(color: Colors.white, width: 4)
-                : BorderSide.none,
-            right: alignment == Alignment.topRight || alignment == Alignment.bottomRight
-                ? BorderSide(color: Colors.white, width: 4)
-                : BorderSide.none,
-          ),
-        ),
+        ],
       ),
     );
   }

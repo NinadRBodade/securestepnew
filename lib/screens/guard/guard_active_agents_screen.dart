@@ -46,7 +46,7 @@ class _GuardActiveAgentsScreenState extends State<GuardActiveAgentsScreen> {
     
     try {
       final response = await http.get(
-        Uri.parse('${AppConstants.baseUrl}/api/v1/guard/active-agents'),
+        Uri.parse('${AppConstants.baseUrl}/api/guards/active-agents'),
         headers: {
           'Authorization': 'Bearer $_token',
           'Content-Type': 'application/json',

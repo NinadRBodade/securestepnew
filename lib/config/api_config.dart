@@ -1,8 +1,15 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
+
 class ApiConfig {
-  // static const String baseUrl = 'http://10.0.2.2:5001/api'; // Android emulator
-  static const String baseUrl = 'http://localhost:5001/api'; // Chrome/Web browser
-  // For iOS simulator use: 'http://localhost:5001/api'
-  // For physical device use your computer's IP: 'http://192.168.1.2:5001/api'
+  // Automatically uses correct URL based on platform
+  static String get baseUrl {
+    if (kIsWeb) {
+      return 'http://localhost:5001/api';
+    } else {
+      // For mobile devices - use your computer's WiFi IP
+      return 'http://10.156.78.17:5001/api';
+    }
+  }
   
   static String token = '';
   

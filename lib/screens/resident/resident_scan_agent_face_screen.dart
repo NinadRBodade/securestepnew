@@ -2,9 +2,11 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'dart:io';
+import 'dart:convert';
+import 'dart:async';
+import 'package:http/http.dart' as http;
 import '../../utils/constants.dart';
 import '../../services/face_recognition_service.dart';
-import '../../services/mock_data_service.dart';
 import 'agent_verification_result_screen.dart';
 
 class ResidentScanAgentFaceScreen extends StatefulWidget {
@@ -33,11 +35,44 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
   String _statusMessage = 'Ask agent to position their face in the frame';
   bool _faceDetected = false;
   int? _matchScore;
+  bool _backendReachable = false;
 
   @override
   void initState() {
     super.initState();
     _initializeCamera();
+    _checkBackendHealth();
+  }
+
+  Future<void> _checkBackendHealth() async {
+    print('🏥 Checking backend health...');
+    print('🌐 Testing connection to: ${AppConstants.baseUrl}');
+    
+    try {
+      final response = await http.get(
+        Uri.parse('${AppConstants.baseUrl}/api/agent/all'),
+        headers: {'Accept': 'application/json'},
+      ).timeout(Duration(seconds: 5));
+      
+      if (response.statusCode == 200) {
+        print('✅ Backend is reachable');
+        setState(() {
+          _backendReachable = true;
+        });
+      } else {
+        print('⚠️ Backend returned status ${response.statusCode}');
+        setState(() {
+          _backendReachable = false;
+          _statusMessage = 'Backend server error (${response.statusCode})';
+        });
+      }
+    } catch (e) {
+      print('❌ Backend not reachable: $e');
+      setState(() {
+        _backendReachable = false;
+        _statusMessage = 'Cannot connect to backend server';
+      });
+    }
   }
 
   Future<void> _initializeCamera() async {
@@ -71,6 +106,16 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
   Future<void> _captureAndVerifyAgent() async {
     if (_isProcessing || _cameraController == null) return;
 
+    // Check backend connectivity before proceeding
+    if (!_backendReachable) {
+      _showErrorDialog(
+        'Backend Not Reachable',
+        'Cannot connect to backend server at ${AppConstants.baseUrl}.\n\nPlease check:\n1. Backend is running\n2. You are on the same WiFi network\n3. IP address is correct (10.156.78.17)',
+        showRetry: true,
+      );
+      return;
+    }
+
     setState(() {
       _isProcessing = true;
       _statusMessage = 'Scanning for registered agent...';
@@ -102,15 +147,93 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
         return;
       }
 
-      // Get all registered agents
-      final agents = MockDataService().getAllAgents();
+      // Get all registered agents from backend
+      print('📡 Fetching registered agents from backend...');
+      print('🌐 API URL: ${AppConstants.baseUrl}/api/agent/all');
+      
+      http.Response response;
+      try {
+        response = await http.get(
+          Uri.parse('${AppConstants.baseUrl}/api/agent/all'),
+          headers: {'Accept': 'application/json'},
+        ).timeout(
+          Duration(seconds: 15),
+          onTimeout: () {
+            throw TimeoutException('Request timed out after 15 seconds');
+          },
+        );
+        
+        print('📥 Response status: ${response.statusCode}');
+        print('📦 Response body: ${response.body}');
+      } on SocketException catch (e) {
+        print('❌ Network Error: No internet connection - $e');
+        setState(() {
+          _statusMessage = 'No internet connection';
+          _isProcessing = false;
+        });
+        _showErrorDialog(
+          'Network Error', 
+          'Cannot reach server. Please check:\n\n1. Your WiFi/mobile data is ON\n2. You are connected to the same network as the backend (WiFi: 10.156.78.17)\n3. Backend server is running\n\nError: $e'
+        );
+        return;
+      } on TimeoutException catch (e) {
+        print('❌ Timeout Error: Server took too long to respond - $e');
+        setState(() {
+          _statusMessage = 'Server timeout';
+          _isProcessing = false;
+        });
+        _showErrorDialog(
+          'Timeout Error', 
+          'Server is taking too long to respond. Please check if the backend is running on 10.156.78.17:5001\n\nError: $e'
+        );
+        return;
+      } on FormatException catch (e) {
+        print('❌ Format Error: Invalid response from server - $e');
+        setState(() {
+          _statusMessage = 'Invalid server response';
+          _isProcessing = false;
+        });
+        _showErrorDialog(
+          'Server Error', 
+          'Server returned invalid data. Please check backend logs.\n\nError: $e'
+        );
+        return;
+      } catch (e) {
+        print('❌ Unknown Error: $e');
+        setState(() {
+          _statusMessage = 'Failed to connect to server';
+          _isProcessing = false;
+        });
+        _showErrorDialog(
+          'Connection Error', 
+          'Could not connect to backend server.\n\nError: $e'
+        );
+        return;
+      }
+      
+      if (response.statusCode != 200) {
+        print('❌ HTTP Error ${response.statusCode}: ${response.body}');
+        setState(() {
+          _statusMessage = 'Server returned error ${response.statusCode}';
+          _isProcessing = false;
+        });
+        _showErrorDialog(
+          'Server Error', 
+          'Backend returned status code ${response.statusCode}.\n\nResponse: ${response.body}'
+        );
+        return;
+      }
+      
+      final agentsData = json.decode(response.body);
+      final List<dynamic> agents = agentsData['agents'] ?? [];
+      print('✅ Fetched ${agents.length} agents from backend');
       
       if (agents.isEmpty) {
         setState(() {
           _statusMessage = 'No registered agents found';
           _isProcessing = false;
         });
-        _showErrorDialog('No Agents', 'No agents have registered in the system yet.');
+        _showErrorDialog('No Agents', 'No agents have registered in the system yet.', showRetry: false);
         return;
       }
 
@@ -119,20 +242,23 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
       // Try to match with each registered agent
       int bestScore = 0;
       String? bestMatchEmail;
+      Map<String, dynamic>? bestMatchAgent;
       
       for (var agent in agents) {
-        print('🔎 Checking against agent: ${agent.email}');
+        final agentEmail = agent['email'] ?? '';
+        print('🔎 Checking against agent: $agentEmail');
         final score = await _faceRecognitionService.verifyFace(
           capturedImagePath: image.path,
           userType: 'agent',
-          userEmail: agent.email,
+          userEmail: agentEmail,
         );
         
-        print('   Score for ${agent.email}: $score%');
+        print('   Score for $agentEmail: $score%');
         
         if (score > bestScore) {
           bestScore = score;
-          bestMatchEmail = agent.email;
+          bestMatchEmail = agentEmail;
+          bestMatchAgent = agent;
         }
       }
 
@@ -151,14 +277,13 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
       }
 
       // Navigate to result screen if agent found
-      if (bestScore >= 70 && bestMatchEmail != null) {
-        final matchedAgent = agents.firstWhere((a) => a.email == bestMatchEmail);
+      if (bestScore >= 70 && bestMatchAgent != null) {
         if (mounted) {
           Navigator.pushReplacement(
             context,
             MaterialPageRoute(
               builder: (context) => AgentVerificationResultScreen(
-                agentData: matchedAgent.toMap(),
+                agentData: Map<String, dynamic>.from(bestMatchAgent!),
               ),
             ),
           );
@@ -266,7 +391,7 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
     );
   }
 
-  void _showErrorDialog(String title, String message) {
+  void _showErrorDialog(String title, String message, {bool showRetry = true}) {
     showDialog(
       context: context,
       builder: (context) => AlertDialog(
@@ -274,17 +399,30 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
           children: [
             Icon(Icons.error_outline, color: Colors.red),
             SizedBox(width: 12),
-            Text(title),
+            Flexible(child: Text(title)),
           ],
         ),
-        content: Text(message),
+        content: SingleChildScrollView(
+          child: Text(message, style: TextStyle(fontSize: 14)),
+        ),
         actions: [
+          if (showRetry)
+            TextButton(
+              onPressed: () async {
+                Navigator.of(context).pop();
+                // Recheck backend health before retry
+                await _checkBackendHealth();
+                // Retry the face scan
+                _captureAndVerifyAgent();
+              },
+              child: Text('RETRY', style: TextStyle(color: Colors.blue, fontWeight: FontWeight.bold)),
+            ),
           TextButton(
             onPressed: () {
               Navigator.of(context).pop();
               Navigator.of(context).pop();
             },
-            child: Text('OK'),
+            child: Text('CANCEL', style: TextStyle(color: Colors.grey)),
           ),
         ],
       ),

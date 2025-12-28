@@ -27,6 +27,7 @@ const faceRoutes = require('./routes/face.routes');
 const complaintRoutes = require('./routes/complaint.routes');
 const adminGuardRoutes = require('./routes/admin.guard.routes');
 const documentVerificationRoutes = require('./routes/documentVerification.routes');
+const verifyRoutes = require('./routes/verify.routes');
 
 // Middleware
 const errorMiddleware = require('./middleware/error.middleware');
@@ -53,7 +54,8 @@ app.get('/health', (req, res) => {
   res.json({ status: 'OK', message: 'Backend running' });
 });
 
-// API routes
+// API routes - QR verification MUST be first (most specific route)
+app.use('/api', verifyRoutes); // Handles /api/verify-agent
 app.use('/api/auth', authRoutes);
 app.use('/api/agent', agentRoutes);
 app.use('/api/agents', agentRoutes); // Alternative path
@@ -84,8 +86,9 @@ initSocket(io);
 app.set('io', io);
 
 // Start server
-const PORT = process.env.PORT || 5000;
+const PORT = process.env.PORT || 5001;
 server.listen(PORT, '0.0.0.0', () => {
   console.log(`🚀 Server running on port ${PORT}`);
-  console.log(`📱 Accessible at http://192.168.1.2:${PORT}`);
+  console.log(`📱 Mobile: http://10.156.78.17:${PORT}`);
+  console.log(`💻 Local: http://localhost:${PORT}`);
 });

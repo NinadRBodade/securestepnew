@@ -91,8 +91,46 @@ class _GuardQRScannerScreenState extends State<GuardQRScannerScreen> {
     setState(() => _isProcessing = true);
 
     try {
-      // Parse QR data
-      final agentData = json.decode(qrData);
+      // DETAILED DEBUG LOGGING
+      print('=' * 80);
+      print('📷 RAW SCANNED DATA:');
+      print('Length: ${qrData.length} characters');
+      print('First 200 chars: ${qrData.length > 200 ? qrData.substring(0, 200) : qrData}');
+      print('Last 50 chars: ${qrData.length > 50 ? qrData.substring(qrData.length - 50) : qrData}');
+      print('=' * 80);
+      
+      // Show user what was scanned
+      ScaffoldMessenger.of(context).showSnackBar(
+        SnackBar(
+          content: Text('Scanned: ${qrData.substring(0, qrData.length > 100 ? 100 : qrData.length)}...'),
+          duration: Duration(seconds: 3),
+        ),
+      );
+      
+      // Check if scanned data looks like HTML
+      if (qrData.trim().startsWith('<!DOCTYPE') || qrData.trim().startsWith('<html')) {
+        throw Exception('❌ Scanned HTML page instead of JSON data.\n\nPlease scan the QR CODE IMAGE, not the webpage.');
+      }
+      
+      // Check if scanned data looks like a URL
+      if (qrData.startsWith('http://') || qrData.startsWith('https://')) {
+        throw Exception('❌ Scanned a URL instead of agent data.\n\nThe QR code should contain JSON, not a link.');
+      }
+      
+      // Try to parse JSON
+      Map<String, dynamic> agentData;
+      try {
+        agentData = json.decode(qrData);
+      } catch (e) {
+        throw Exception('❌ Invalid JSON format.\n\nError: ${e.toString()}\n\nScanned data must be valid JSON.');
+      }
+      
+      // Validate required fields
+      if (!agentData.containsKey('id') || !agentData.containsKey('name') || !agentData.containsKey('email')) {
+        throw Exception('❌ Missing required fields.\n\nQR code must contain: id, name, and email');
+      }
+
+      print('✅ Valid agent data: ${agentData['name']} (${agentData['email']})');
 
       // Use offline service for online/offline handling
       final result = await _offlineService.processQRScan(

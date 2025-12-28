@@ -1,6 +1,7 @@
 import 'dart:io';
 import 'dart:math';
 import 'dart:ui';
+import 'dart:convert';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -22,11 +23,75 @@ class FaceRecognitionService {
   );
 
   /// Verify if a captured face matches a registered person's face
+  /// Uses BACKEND verification for accurate face matching
+  /// [capturedImagePath] - Path to the just captured face image
+  /// [userType] - 'agent' or 'resident'
+  /// [userEmail] - Email of the person to verify against
+  /// Returns a match score from 0-100
+  Future<int> verifyFaceWithBackend({
+    required String capturedImagePath,
+    required String userEmail,
+  }) async {
+    try {
+      print('🔍 Verifying face using backend for: $userEmail');
+      
+      var request = http.MultipartRequest(
+        'POST',
+        Uri.parse('${AppConstants.baseUrl}/api/face/verify'),
+      );
+      
+      request.fields['email'] = userEmail;
+      request.files.add(await http.MultipartFile.fromPath(
+        'capturedImage',
+        capturedImagePath,
+      ));
+      
+      print('📤 Sending verification request...');
+      var response = await request.send().timeout(Duration(seconds: 30));
+      final responseBody = await response.stream.bytesToString();
+      
+      print('📡 Response status: ${response.statusCode}');
+      print('📄 Response body: $responseBody');
+      
+      if (response.statusCode == 200) {
+        final result = json.decode(responseBody);
+        final matchScore = result['matchScore'] ?? 0;
+        print('✅ Backend verification complete - Score: $matchScore');
+        return matchScore;
+      } else {
+        print('❌ Backend verification failed: $responseBody');
+        return 0;
+      }
+    } catch (e) {
+      print('❌ Backend verification error: $e');
+      return 0;
+    }
+  }
+
+  /// Verify if a captured face matches a registered person's face
   /// [capturedImagePath] - Path to the just captured face image
   /// [userType] - 'agent' or 'resident'
   /// [userEmail] - Email of the person to verify against
   /// Returns a match score from 0-100
   Future<int> verifyFace({
+    required String capturedImagePath,
+    required String userType,
+    required String userEmail,
+  }) async {
+    try {
+      // Use backend verification instead of ML Kit
+      return await verifyFaceWithBackend(
+        capturedImagePath: capturedImagePath,
+        userEmail: userEmail,
+      );
+    } catch (e) {
+      print('Error verifying face: $e');
+      return 0;
+    }
+  }
+
+  /// OLD METHOD - Uses ML Kit (not reliable for face matching)
+  Future<int> verifyFaceLocal({
     required String capturedImagePath,
     required String userType,
     required String userEmail,

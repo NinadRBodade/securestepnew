@@ -1,6 +1,6 @@
 // Admin Dashboard - Complete JavaScript
 const CONFIG = {
-    API_BASE_URL: 'http://127.0.0.1:5001/api',
+    API_BASE_URL: 'http://10.156.78.17:5001/api',
     DEFAULT_SCORE: 75
 };
 
@@ -581,9 +581,7 @@ function createAgentCard(agent) {
                             ✅ Verify
                         </button>
                     ` : agent.verified ? `
-                        <button class="btn btn-primary" onclick="event.stopPropagation(); viewQRCode('${agent.email}')">
-                            📱 View QR
-                        </button>
+                        <span class="badge badge-info">QR: View in Mobile App</span>
                     ` : ''}
                 </div>
             </div>
@@ -630,7 +628,7 @@ function viewAgentDetails(email) {
                 <button class="btn btn-success" onclick="openVerifyModal('${agent.email}')">✅ Verify Agent</button>
                 <button class="btn btn-danger" onclick="rejectAgentDirect('${agent.email}')">❌ Reject</button>
             ` : agent.verified ? `
-                <button class="btn btn-primary" onclick="viewQRCode('${agent.email}')">📱 View QR Code</button>
+                <p class="text-muted"><i>📱 QR Code: Available in Agent Mobile App only</i></p>
             ` : ''}
         </div>
     `;
@@ -710,48 +708,8 @@ async function rejectAgentDirect(email) {
     }
 }
 
-async function viewQRCode(email) {
-    const agent = allAgents.find(a => a.email === email);
-    if (!agent || !agent.verified) {
-        alert('Agent must be verified to view QR code');
-        return;
-    }
-    
-    currentAgent = agent;
-    
-    const qrContainer = document.getElementById('qr-container');
-    qrContainer.innerHTML = '';
-    
-    const qrData = JSON.stringify({
-        id: agent._id || agent.id,
-        name: agent.name,
-        email: agent.email,
-        company: agent.company,
-        verified: true,
-        score: agent.score || 0,
-        timestamp: new Date().toISOString()
-    });
-    
-    new QRCode(qrContainer, {
-        text: qrData,
-        width: 256,
-        height: 256,
-        colorDark: '#000000',
-        colorLight: '#ffffff',
-        correctLevel: QRCode.CorrectLevel.H
-    });
-    
-    document.getElementById('qr-info').innerHTML = `
-        <h3>${agent.name}</h3>
-        <p><strong>Email:</strong> ${agent.email}</p>
-        <p><strong>Company:</strong> ${agent.company || 'N/A'}</p>
-        <p><strong>Trust Score:</strong> ⭐ ${agent.score || 0}/100</p>
-        <p><strong>Status:</strong> ✅ Verified</p>
-    `;
-    
-    closeAgentModal();
-    document.getElementById('qr-modal').style.display = 'block';
-}
+// QR Code generation removed - QR codes are only generated in the mobile app
+// This ensures consistency and proper signature/hash generation
 
 function downloadQR() {
     if (!currentAgent) return;

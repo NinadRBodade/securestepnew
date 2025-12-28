@@ -3,6 +3,7 @@ import 'package:http/http.dart' as http;
 import 'dart:convert';
 import 'dart:ui';
 import '../../utils/validators.dart';
+import '../../utils/constants.dart';
 import 'guard_login_screen.dart';
 
 /// Guard Access Request Screen - No animations
@@ -47,7 +48,7 @@ class _GuardAccessRequestScreenState extends State<GuardAccessRequestScreen> {
       final email = _emailController.text.trim().toLowerCase();
       
       final response = await http.post(
-        Uri.parse('http://localhost:5001/api/auth/guard/request-credentials'),
+        Uri.parse('${AppConstants.baseUrl}/api/auth/guard/request-credentials'),
         headers: {'Content-Type': 'application/json'},
         body: json.encode({'email': email}),
       ).timeout(const Duration(seconds: 10));

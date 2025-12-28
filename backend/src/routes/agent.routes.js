@@ -11,11 +11,11 @@ router.post('/register', upload.fields([
   { name: 'certificate', maxCount: 1 }
 ]), agentController.registerAgent);
 
-// Get agent profile by email
-router.get('/:email', agentController.getProfile);
+// Verify agent QR code (must come BEFORE /:email route)
+router.post('/verify-qr', agentController.verifyQR);
 
-// Admin: Get all agents
-router.get('/', async (req, res) => {
+// Admin: Get all agents (MUST be before /:email route)
+router.get('/all', async (req, res) => {
   try {
     const agents = await Agent.find().sort({ createdAt: -1 });
     res.json({ success: true, agents });
@@ -23,6 +23,9 @@ router.get('/', async (req, res) => {
     res.status(500).json({ error: error.message });
   }
 });
+
+// Get agent profile by email (MUST be after specific routes like /all)
+router.get('/:email', agentController.getProfile);
 
 // Admin: Get all pending verification agents
 router.get('/admin/pending', async (req, res) => {

@@ -124,7 +124,7 @@ class OfflineQRService {
   ) async {
     try {
       final response = await http.post(
-        Uri.parse('${AppConstants.baseUrl}/api/v1/guard/scan-agent'),
+        Uri.parse('${AppConstants.baseUrl}/api/guards/scan-agent'),
         headers: {
           'Authorization': 'Bearer $token',
           'Content-Type': 'application/json',
@@ -256,7 +256,7 @@ class OfflineQRService {
         try {
           // Send to backend
           final response = await http.post(
-            Uri.parse('${AppConstants.baseUrl}/api/v1/guard/sync-offline-entry'),
+            Uri.parse('${AppConstants.baseUrl}/api/guards/sync-offline-entry'),
             headers: {
               'Authorization': 'Bearer $token',
               'Content-Type': 'application/json',
