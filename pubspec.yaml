@@ -1,0 +1,72 @@
+name: society_safety_app
+description: Society-Level Real-Time Verification & Safety System
+publish_to: 'none'
+version: 1.0.0+1
+
+environment:
+  sdk: '>=3.0.0 <4.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  
+  # UI & Icons
+  cupertino_icons: ^1.0.2
+  google_fonts: ^6.1.0
+  
+  # QR Code
+  qr_flutter: ^4.1.0
+  mobile_scanner: ^5.2.3
+  
+  # Face Recognition & Camera
+  camera: ^0.10.5+5
+  google_mlkit_face_detection: ^0.10.0
+  path_provider: ^2.1.1
+  path: ^1.8.3
+  image_picker: ^1.0.4
+  file_picker: ^8.0.0+1
+  
+  # State Management (will use in later phases)
+  provider: ^6.1.1
+  
+  # Storage
+  shared_preferences: ^2.2.2
+  sqflite: ^2.3.0
+  
+  # Network connectivity check
+  connectivity_plus: ^5.0.2
+  
+  # Location Services
+  geolocator: ^10.1.0
+  geocoding: ^2.1.1
+  
+  # HTTP for API calls
+  http: ^1.1.0
+  mime: ^1.0.4
+  dio: ^5.4.0
+  crypto: ^3.0.3
+  
+  # Date formatting
+  intl: ^0.19.0
+  
+  # Bluetooth for mesh networking
+  flutter_blue_plus: ^1.32.0
+  permission_handler: ^11.3.1
+  
+  # UUID for generating unique IDs
+  uuid: ^4.2.1
+  
+  # URL launcher for opening maps
+  url_launcher: ^6.2.2
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^3.0.0
+
+flutter:
+  uses-material-design: true
+  
+  # Add assets (we'll use in Phase 2)
+  # assets:
+  #   - assets/images/
