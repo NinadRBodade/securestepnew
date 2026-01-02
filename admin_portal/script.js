@@ -1,6 +1,6 @@
 // Admin Dashboard - Complete JavaScript
 const CONFIG = {
-    API_BASE_URL: 'http://10.156.78.17:5001/api',
+    API_BASE_URL: 'http://localhost:5001/api',
     DEFAULT_SCORE: 75
 };
 
@@ -35,6 +35,35 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadDashboardStats, 60000);
 });
 
+// User menu toggle (for modern header)
+function toggleUserMenu() {
+    const dropdown = document.getElementById('user-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const userMenuContainer = document.querySelector('.user-menu-container');
+    const dropdown = document.getElementById('user-dropdown');
+    
+    if (dropdown && !userMenuContainer.contains(event.target)) {
+        dropdown.classList.remove('show');
+    }
+});
+
+// Handle logout
+function handleLogout() {
+    if (confirm('Are you sure you want to logout?')) {
+        // Clear session
+        localStorage.removeItem('adminToken');
+        sessionStorage.clear();
+        // Redirect to login or home page
+        window.location.href = '/';
+    }
+}
+
 // Initialize date/time
 function initDateTime() {
     function updateDateTime() {
@@ -58,11 +87,14 @@ function initDateTime() {
 function showSection(section) {
     currentSection = section;
     
-    // Update nav items
-    document.querySelectorAll('.nav-item').forEach(item => {
+    // Update nav items (support both old .nav-item and new .nav-link)
+    document.querySelectorAll('.nav-item, .nav-link').forEach(item => {
         item.classList.remove('active');
     });
-    event.target.closest('.nav-item')?.classList.add('active');
+    if (event && event.target) {
+        const navItem = event.target.closest('.nav-item') || event.target.closest('.nav-link');
+        if (navItem) navItem.classList.add('active');
+    }
     
     // Hide all sections
     document.querySelectorAll('.content-section').forEach(sec => {
@@ -84,7 +116,10 @@ function showSection(section) {
         monitoring: 'System Monitoring',
         sos: 'SOS Emergency Alerts'
     };
-    document.getElementById('page-title').textContent = titles[section] || 'Admin Dashboard';
+    const pageTitle = document.getElementById('page-title');
+    if (pageTitle) {
+        pageTitle.textContent = titles[section] || 'Admin Dashboard';
+    }
     
     // Load section data
     if (section === 'agents') {
@@ -107,7 +142,7 @@ async function loadDashboardStats() {
         const [societiesRes, guardsRes, agentsRes, sosRes] = await Promise.all([
             fetch(`${CONFIG.API_BASE_URL}/societies`).catch(() => ({json: () => ({societies: []})})),
             fetch(`${CONFIG.API_BASE_URL}/guards`).catch(() => ({json: () => ({guards: []})})),
-            fetch(`${CONFIG.API_BASE_URL}/agents`).catch(() => ({json: () => ({agents: []})})),
+            fetch(`${CONFIG.API_BASE_URL}/agents/all`).catch(() => ({json: () => ({agents: []})})),
             fetch(`${CONFIG.API_BASE_URL}/sos`).catch(() => ({json: () => ({alerts: []})}))
         ]);
         
@@ -440,7 +475,7 @@ async function loadAgents() {
     try {
         console.log('📋 Loading agents from API...');
         showLoading('agents-container');
-        const response = await fetch(`${CONFIG.API_BASE_URL}/agents`);
+        const response = await fetch(`${CONFIG.API_BASE_URL}/agents/all`);
         const data = await response.json();
         allAgents = data.agents || [];
         

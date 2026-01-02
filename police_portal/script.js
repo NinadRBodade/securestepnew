@@ -1,9 +1,9 @@
 // Police Dashboard - Real-time SOS Alert System
 // Configuration
 const CONFIG = {
-    API_BASE_URL: 'http://10.156.78.17:5001/api',
-    SOCKET_URL: 'http://10.156.78.17:5001',
-    DEFAULT_CENTER: [19.0760, 72.8777], // Mumbai coordinates
+    API_BASE_URL: 'http://192.168.1.59:5001/api',
+    SOCKET_URL: 'http://192.168.1.59:5001',
+    DEFAULT_CENTER: { lat: 19.0760, lng: 72.8777 }, // Mumbai coordinates
     DEFAULT_ZOOM: 12
 };
 
@@ -14,6 +14,58 @@ let markers = {};
 let alerts = [];
 let currentFilter = 'all';
 let selectedAlert = null;
+
+// Tab switching function
+function switchTab(tabName) {
+    console.log('Switching to tab:', tabName);
+    const tabs = document.querySelectorAll('.nav-tab');
+    tabs.forEach(tab => tab.classList.remove('active'));
+    event.target.classList.add('active');
+    // You can add logic here to show/hide different views
+}
+
+// User menu toggle
+function toggleUserMenu() {
+    const dropdown = document.getElementById('user-dropdown');
+    if (dropdown) {
+        dropdown.classList.toggle('show');
+    }
+}
+
+// Close dropdown when clicking outside
+document.addEventListener('click', function(event) {
+    const userMenuContainer = document.querySelector('.user-menu-container');
+    const dropdown = document.getElementById('user-dropdown');
+    
+    if (dropdown && !userMenuContainer.contains(event.target)) {
+        dropdown.classList.remove('show');
+    }
+});
+
+// Handle logout
+function handleLogout() {
+    if (confirm('Are you sure you want to logout?')) {
+        // Clear session
+        localStorage.removeItem('policeToken');
+        sessionStorage.clear();
+        // Redirect to login or home page
+        window.location.href = '/';
+    }
+}
+
+// Center map function
+function centerMap() {
+    if (map) {
+        map.setCenter(CONFIG.DEFAULT_CENTER);
+        map.setZoom(CONFIG.DEFAULT_ZOOM);
+    }
+}
+
+// View all alerts function
+function viewAllAlerts() {
+    console.log('Viewing all alerts');
+    // Add your view all logic here
+}
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
@@ -26,16 +78,25 @@ document.addEventListener('DOMContentLoaded', function() {
     setInterval(loadAlerts, 30000);
 });
 
-// Initialize Leaflet map
+// Initialize Google Maps
 function initMap() {
-    map = L.map('map').setView(CONFIG.DEFAULT_CENTER, CONFIG.DEFAULT_ZOOM);
+    map = new google.maps.Map(document.getElementById('map'), {
+        center: CONFIG.DEFAULT_CENTER,
+        zoom: CONFIG.DEFAULT_ZOOM,
+        mapTypeControl: true,
+        streetViewControl: true,
+        fullscreenControl: true,
+        zoomControl: true,
+        styles: [
+            {
+                featureType: 'poi',
+                elementType: 'labels',
+                stylers: [{ visibility: 'off' }]
+            }
+        ]
+    });
     
-    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png', {
-        attribution: '© OpenStreetMap contributors',
-        maxZoom: 19
-    }).addTo(map);
-    
-    console.log('✅ Map initialized');
+    console.log('✅ Google Maps initialized');
 }
 
 // Initialize Socket.IO connection
@@ -145,7 +206,7 @@ async function loadAlerts() {
         const data = await response.json();
         
         if (data.status === 'success') {
-            alerts = data.data.sosEvents || [];
+            alerts = data.data.events || data.data.sosEvents || [];
             renderAlerts();
             updateStats();
             updateMap();
@@ -223,12 +284,18 @@ function createAlertCard(alert) {
     // Get society name from societyId (could be string or object)
     const societyName = typeof alert.societyId === 'string' ? alert.societyId : (alert.societyId?.name || 'Unknown');
     
+    // Handle different user data formats (triggeredBy object vs userName/userId)
+    const userName = alert.triggeredBy?.name || alert.userName || 'Unknown';
+    const userPhone = alert.triggeredBy?.phone || alert.userPhone || null;
+    const userEmail = alert.triggeredBy?.email || alert.userEmail || null;
+    
     // Format location information with all details
     const locationInfo = alert.location && alert.location.latitude && alert.location.longitude ? 
         `<div class="alert-location" onclick="showLocationOnMap('${alert.sosId}')">
             📍 <strong>GPS:</strong> ${alert.location.latitude.toFixed(6)}, ${alert.location.longitude.toFixed(6)}
             ${alert.location.address || alert.locationAddress ? `<br><small style="color: #666;">${alert.location.address || alert.locationAddress}</small>` : ''}
-        </div>` : (alert.locationAddress ? `<div class="alert-location">📍 ${alert.locationAddress}</div>` : '');
+        </div>` : (alert.locationAddress ? `<div class="alert-location">📍 ${alert.locationAddress}</div>` : 
+        (alert.latitude && alert.longitude ? `<div class="alert-location" onclick="showLocationOnMap('${alert.sosId}')">📍 <strong>GPS:</strong> ${parseFloat(alert.latitude).toFixed(6)}, ${parseFloat(alert.longitude).toFixed(6)}</div>` : ''));
     
     const agentInfo = alert.involvedAgent ? 
         `<div class="alert-agent">
@@ -253,9 +320,9 @@ function createAlertCard(alert) {
                     <strong>🏠 Flat:</strong> ${alert.flatNumber}
                 </div>
                 <div class="alert-info">
-                    <strong>👤 Resident:</strong> ${alert.triggeredBy?.name || 'Unknown'}
-                    ${alert.triggeredBy?.phone ? `<br>📞 ${alert.triggeredBy.phone}` : ''}
-                    ${alert.triggeredBy?.email ? `<br>✉️ ${alert.triggeredBy.email}` : ''}
+                    <strong>👤 Resident:</strong> ${userName}
+                    ${userPhone ? `<br>📞 ${userPhone}` : ''}
+                    ${userEmail ? `<br>✉️ ${userEmail}` : ''}
                 </div>
                 ${alert.description ? `
                 <div class="alert-description">
@@ -354,56 +421,95 @@ function updateStats() {
 // Update map markers
 function updateMap() {
     // Clear existing markers
-    Object.values(markers).forEach(marker => map.removeLayer(marker));
+    Object.values(markers).forEach(marker => marker.setMap(null));
     markers = {};
     
     // Add markers for alerts with location
+    const bounds = new google.maps.LatLngBounds();
+    let hasMarkers = false;
+    
     alerts.forEach(alert => {
-        if (alert.location && alert.location.latitude && alert.location.longitude) {
-            const { latitude, longitude } = alert.location;
+        // Handle both location object and direct lat/lng properties
+        const lat = alert.location?.latitude || alert.latitude;
+        const lng = alert.location?.longitude || alert.longitude;
+        
+        if (lat && lng) {
+            const latitude = parseFloat(lat);
+            const longitude = parseFloat(lng);
             const status = alert.status === 'triggered' ? 'active' : alert.status;
+            const position = { lat: latitude, lng: longitude };
             
-            const icon = L.divIcon({
-                className: `custom-marker marker-${status}`,
-                html: `<div class="marker-pin ${status}"></div>`,
-                iconSize: [30, 42],
-                iconAnchor: [15, 42]
+            // Create custom marker icon based on status
+            let markerColor = '#ff4444'; // red for active
+            if (status === 'acknowledged') markerColor = '#ff9800'; // orange
+            if (status === 'resolved') markerColor = '#4caf50'; // green
+            
+            const marker = new google.maps.Marker({
+                position: position,
+                map: map,
+                title: alert.sosId,
+                icon: {
+                    path: google.maps.SymbolPath.CIRCLE,
+                    scale: 10,
+                    fillColor: markerColor,
+                    fillOpacity: 0.9,
+                    strokeColor: '#ffffff',
+                    strokeWeight: 2
+                },
+                animation: status === 'active' ? google.maps.Animation.BOUNCE : null
             });
             
-            const marker = L.marker([latitude, longitude], { icon })
-                .addTo(map)
-                .bindPopup(createMarkerPopup(alert));
+            // Create info window
+            const infoWindow = new google.maps.InfoWindow({
+                content: createMarkerPopup(alert)
+            });
             
+            marker.addListener('click', () => {
+                // Close all other info windows
+                Object.values(markers).forEach(m => {
+                    if (m.infoWindow) m.infoWindow.close();
+                });
+                infoWindow.open(map, marker);
+            });
+            
+            marker.infoWindow = infoWindow;
             markers[alert.sosId] = marker;
+            
+            bounds.extend(position);
+            hasMarkers = true;
         }
     });
     
     // Auto-center map if there are active alerts
-    const activeAlerts = alerts.filter(a => 
-        a.status === 'triggered' || a.status === 'active'
-    ).filter(a => a.location);
-    
-    if (activeAlerts.length > 0) {
-        const bounds = L.latLngBounds(
-            activeAlerts.map(a => [a.location.latitude, a.location.longitude])
-        );
-        map.fitBounds(bounds, { padding: [50, 50] });
+    if (hasMarkers) {
+        map.fitBounds(bounds);
+        // Prevent zooming in too close for single marker
+        google.maps.event.addListenerOnce(map, 'bounds_changed', function() {
+            if (map.getZoom() > 16) {
+                map.setZoom(16);
+            }
+        });
     }
 }
 
 // Create marker popup HTML
 function createMarkerPopup(alert) {
     const societyName = typeof alert.societyId === 'string' ? alert.societyId : (alert.societyId?.name || 'Unknown');
+    const userName = alert.triggeredBy?.name || alert.userName || 'Unknown';
+    const userPhone = alert.triggeredBy?.phone || alert.userPhone || null;
+    const lat = alert.location?.latitude || alert.latitude;
+    const lng = alert.location?.longitude || alert.longitude;
+    const address = alert.location?.address || alert.locationAddress;
     
     return `
         <div class="marker-popup">
             <strong>🚨 ${alert.sosId}</strong><br>
-            <strong>👤 Name:</strong> ${alert.triggeredBy?.name || 'Unknown'}<br>
-            ${alert.triggeredBy?.phone ? `<strong>📞 Phone:</strong> ${alert.triggeredBy.phone}<br>` : ''}
+            <strong>👤 Name:</strong> ${userName}<br>
+            ${userPhone ? `<strong>📞 Phone:</strong> ${userPhone}<br>` : ''}
             <strong>🏢 Society:</strong> ${societyName}<br>
             <strong>🏠 Flat:</strong> ${alert.flatNumber}<br>
-            <strong>📍 Location:</strong> ${alert.location.latitude.toFixed(6)}, ${alert.location.longitude.toFixed(6)}<br>
-            ${alert.location.address || alert.locationAddress ? `<strong>Address:</strong> ${alert.location.address || alert.locationAddress}<br>` : ''}
+            <strong>📍 Location:</strong> ${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}<br>
+            ${address ? `<strong>Address:</strong> ${address}<br>` : ''}
             <strong>⏰ Status:</strong> ${alert.status}<br>
             <strong>🕐 Time:</strong> ${getTimeAgo(alert.triggeredAt)}<br>
             ${alert.description ? `<strong>💬 Details:</strong> ${alert.description}<br>` : ''}
@@ -416,9 +522,16 @@ function createMarkerPopup(alert) {
 function showLocationOnMap(sosId) {
     event.stopPropagation();
     const alert = alerts.find(a => a.sosId === sosId);
-    if (alert && alert.location) {
-        map.setView([alert.location.latitude, alert.location.longitude], 16);
-        markers[sosId]?.openPopup();
+    if (alert) {
+        const lat = alert.location?.latitude || alert.latitude;
+        const lng = alert.location?.longitude || alert.longitude;
+        if (lat && lng) {
+            map.setCenter({ lat: parseFloat(lat), lng: parseFloat(lng) });
+            map.setZoom(16);
+            if (markers[sosId] && markers[sosId].infoWindow) {
+                markers[sosId].infoWindow.open(map, markers[sosId]);
+            }
+        }
     }
 }
 

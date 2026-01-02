@@ -11,10 +11,19 @@ class AppConstants {
       // For Web browser (Chrome, etc.)
       return 'http://localhost:5001';
     } else {
-      // For Mobile devices (Android/iOS) - use your computer's WiFi IP
-      // Your computer IP: 10.156.78.17 (Wi-Fi)
-      // Make sure your phone is connected to the same WiFi network
-      return 'http://10.156.78.17:5001';
+      // For Mobile devices (Android/iOS)
+      // Real device: Use your computer's WiFi IP (192.168.1.59)
+      try {
+        if (Platform.isAndroid) {
+          return 'http://192.168.1.59:5001';
+        } else if (Platform.isIOS) {
+          return 'http://192.168.1.59:5001';
+        } else {
+          return 'http://192.168.1.59:5001';
+        }
+      } catch (e) {
+        return 'http://192.168.1.59:5001';
+      }
     }
   }
   

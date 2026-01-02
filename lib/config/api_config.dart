@@ -7,7 +7,7 @@ class ApiConfig {
       return 'http://localhost:5001/api';
     } else {
       // For mobile devices - use your computer's WiFi IP
-      return 'http://10.156.78.17:5001/api';
+      return 'http://192.168.1.59:5001/api';
     }
   }
   

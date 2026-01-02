@@ -5,96 +5,97 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Police Dashboard - Society Safety System</title>
     <link rel="stylesheet" href="styles.css">
-    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
-    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrxlR_2bfzg7z2kgzqHmtX45HlGxzN0iw"></script>
 </head>
 <body>
-    <div class="container">
-        <!-- Header -->
-        <header class="header">
-            <div class="header-left">
-                <h1>🚓 Police Emergency Dashboard</h1>
-                <p class="subtitle">Real-time SOS Alert Monitoring System</p>
+    <div class="dashboard-container">
+        <!-- Top Navigation Bar -->
+        <nav class="top-nav">
+            <div class="nav-left">
+                <div class="logo">
+                    <span class="logo-icon">🚓</span>
+                    <div class="logo-text">
+                        <h1>Police Dashboard</h1>
+                        <p>Web</p>
+                    </div>
+                </div>
             </div>
-            <div class="header-right">
+            <div class="nav-center">
+                <div class="nav-tabs">
+                    <button class="nav-tab active" onclick="switchTab('dashboard')">Dashboard</button>
+                    <button class="nav-tab" onclick="switchTab('incidents')">Incidents</button>
+                </div>
+            </div>
+            <div class="nav-right">
                 <div class="status-indicator" id="connection-status">
                     <span class="status-dot offline"></span>
                     <span>Disconnected</span>
                 </div>
                 <div class="datetime" id="current-datetime"></div>
+                <div class="user-menu-container">
+                    <div class="user-menu" onclick="toggleUserMenu()">👤</div>
+                    <div class="user-dropdown" id="user-dropdown">
+                        <div class="dropdown-item" onclick="handleLogout()">
+                            <span>🚪</span> Logout
+                        </div>
+                    </div>
+                </div>
             </div>
-        </header>
+        </nav>
 
-        <!-- Stats Bar -->
-        <div class="stats-bar">
-            <div class="stat-card critical">
-                <div class="stat-icon">🚨</div>
-                <div class="stat-content">
-                    <div class="stat-value" id="active-count">0</div>
-                    <div class="stat-label">Active Emergencies</div>
+        <!-- Main Dashboard Grid -->
+        <div class="dashboard-grid">
+            <!-- Stats Overview -->
+            <div class="stats-overview">
+                <div class="stat-card active-card">
+                    <div class="stat-header">
+                        <span class="stat-label">ACTIVE:</span>
+                        <span class="stat-value" id="active-count">0</span>
+                    </div>
+                    <div class="stat-footer">Active Emergencies</div>
+                </div>
+                <div class="stat-card acknowledged-card">
+                    <div class="stat-header">
+                        <span class="stat-label">ACKNOWLEDGED:</span>
+                        <span class="stat-value" id="acknowledged-count">0</span>
+                    </div>
+                    <div class="stat-footer">Acknowledged</div>
+                </div>
+                <div class="stat-card resolved-card">
+                    <div class="stat-header">
+                        <span class="stat-label">RESOLVED:</span>
+                        <span class="stat-value" id="resolved-count">0</span>
+                    </div>
+                    <div class="stat-footer">Resolved Today</div>
+                </div>
+                <div class="stat-card total-card">
+                    <div class="stat-header">
+                        <span class="stat-label">TOTAL ALERTS:</span>
+                        <span class="stat-value" id="total-count">0</span>
+                    </div>
+                    <div class="stat-footer">Total Alerts</div>
                 </div>
             </div>
-            <div class="stat-card warning">
-                <div class="stat-icon">⏰</div>
-                <div class="stat-content">
-                    <div class="stat-value" id="acknowledged-count">0</div>
-                    <div class="stat-label">Acknowledged</div>
-                </div>
-            </div>
-            <div class="stat-card success">
-                <div class="stat-icon">✅</div>
-                <div class="stat-content">
-                    <div class="stat-value" id="resolved-count">0</div>
-                    <div class="stat-label">Resolved Today</div>
-                </div>
-            </div>
-            <div class="stat-card info">
-                <div class="stat-icon">📊</div>
-                <div class="stat-content">
-                    <div class="stat-value" id="total-count">0</div>
-                    <div class="stat-label">Total Alerts</div>
-                </div>
-            </div>
-        </div>
 
-        <!-- Main Content Area -->
-        <div class="main-content">
-            <!-- Map Section -->
-            <div class="map-section">
-                <div class="section-header">
-                    <h2>📍 Live Location Map</h2>
-                    <div class="map-controls">
-                        <button class="btn btn-sm" onclick="centerMap()">Center Map</button>
-                        <button class="btn btn-sm" onclick="toggleHeatmap()">Toggle Heatmap</button>
+            <!-- Map Section with Controls -->
+            <div class="map-wrapper">
+                <div class="map-header">
+                    <h2>🚨 Emergency Alerts</h2>
+                    <div class="map-view-toggle">
+                        <button class="view-btn active" onclick="centerMap()">🗺️ Map View</button>
                     </div>
                 </div>
                 <div id="map" class="map-container"></div>
-                <div class="map-legend">
-                    <div class="legend-item">
-                        <span class="marker-red"></span> Active Emergency
-                    </div>
-                    <div class="legend-item">
-                        <span class="marker-orange"></span> Acknowledged
-                    </div>
-                    <div class="legend-item">
-                        <span class="marker-green"></span> Resolved
-                    </div>
-                </div>
             </div>
 
-            <!-- Alerts List Section -->
-            <div class="alerts-section">
-                <div class="section-header">
-                    <h2>🚨 Emergency Alerts</h2>
-                    <div class="filter-buttons">
-                        <button class="filter-btn active" data-filter="all" onclick="filterAlerts('all')">All</button>
-                        <button class="filter-btn" data-filter="active" onclick="filterAlerts('active')">Active</button>
-                        <button class="filter-btn" data-filter="acknowledged" onclick="filterAlerts('acknowledged')">Acknowledged</button>
-                        <button class="filter-btn" data-filter="resolved" onclick="filterAlerts('resolved')">Resolved</button>
-                    </div>
+            <!-- Critical Alerts Panel -->
+            <div class="alerts-panel">
+                <div class="alerts-header">
+                    <h2>RECENT CRITICAL ALERTS</h2>
+                    <button class="view-all-btn" onclick="viewAllAlerts()">VIEW ALL</button>
                 </div>
-                <div class="alerts-container" id="alerts-container">
+                <div class="alerts-list" id="alerts-container">
                     <div class="no-alerts">
                         <span class="icon">📭</span>
                         <p>No emergency alerts</p>
@@ -107,6 +108,7 @@
 
     <!-- Alert Detail Modal -->
     <div class="modal" id="alert-modal">
+        <div class="modal-overlay" onclick="closeModal()"></div>
         <div class="modal-content">
             <div class="modal-header">
                 <h2>Emergency Alert Details</h2>
@@ -117,7 +119,8 @@
             </div>
             <div class="modal-footer">
                 <button class="btn btn-secondary" onclick="closeModal()">Close</button>
-                <button class="btn btn-primary" onclick="dispatchPolice()">Dispatch Police Unit</button>
+                <button class="btn btn-verify" onclick="verifyAlert()">Verify</button>
+                <button class="btn btn-primary" onclick="dispatchPolice()">Dispatch Unit</button>
             </div>
         </div>
     </div>

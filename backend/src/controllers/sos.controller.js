@@ -119,10 +119,35 @@ exports.triggerSOS = async (req, res) => {
     }
 
     // Return success (sanitize response - hide hash from user)
+    // Format response to match Flutter SOSEvent model
+    const formattedResponse = {
+      id: sosId,
+      userId: user.id,
+      userName: user.name || user.fullName || 'Unknown User',
+      userRole: user.role,
+      flatNumber: sosEvent.flatNumber,
+      timestamp: sosEvent.triggeredAt.toISOString(),
+      latitude: latitude ? String(latitude) : null,
+      longitude: longitude ? String(longitude) : null,
+      locationAddress: sosEvent.locationAddress,
+      status: 'active',
+      description: sosEvent.description,
+      agentId: null,
+      agentName: null,
+      agentCompany: null,
+      photoPath: null,
+      guardId: null,
+      acknowledgedAt: null,
+      resolvedAt: null,
+      resolutionNotes: null,
+      isSynced: true,
+      blockchainHash: user.role === 'admin' ? blockchainHash : null
+    };
+
     res.status(201).json({
       status: 'success',
       message: 'SOS triggered successfully',
-      data: { sosEvent: sanitizeSOSEvent(sosEvent, user.role) }
+      data: { sosEvent: formattedResponse }
     });
 
   } catch (error) {

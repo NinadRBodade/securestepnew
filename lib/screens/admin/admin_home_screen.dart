@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../utils/constants.dart';
 import '../../services/auth_service.dart';
+import '../../config/api_config.dart';
+import '../splash_screen.dart';
 import 'admin_verify_agents_screen.dart';
 import 'admin_verification_dashboard.dart';
 
@@ -20,7 +22,13 @@ class AdminHomeScreen extends StatelessWidget {
             icon: const Icon(Icons.logout),
             onPressed: () async {
               await AuthService.clearSession();
-              Navigator.of(context).popUntil((route) => route.isFirst);
+              ApiConfig.token = '';
+              if (context.mounted) {
+                Navigator.of(context).pushAndRemoveUntil(
+                  MaterialPageRoute(builder: (context) => const SplashScreen()),
+                  (route) => false,
+                );
+              }
             },
           ),
         ],

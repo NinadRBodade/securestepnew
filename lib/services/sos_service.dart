@@ -23,8 +23,13 @@ class SOSService {
     _dio.interceptors.add(
       InterceptorsWrapper(
         onRequest: (options, handler) async {
-          options.headers['Authorization'] =
-              'Bearer ${ApiConfig.token}';
+          // Always read token from SharedPreferences (persistent storage)
+          final prefs = await SharedPreferences.getInstance();
+          final token = prefs.getString('auth_token') ?? '';
+          
+          if (token.isNotEmpty) {
+            options.headers['Authorization'] = 'Bearer $token';
+          }
           return handler.next(options);
         },
       ),
@@ -94,28 +99,22 @@ class SOSService {
       };
 
       // Try to send to backend
-      try {
-        print('🔄 Sending SOS to: ${ApiConfig.baseUrl}/sos');
-        print('🔑 Token: ${ApiConfig.token.substring(0, 20)}...');
-        final response = await _dio.post('/sos', data: sosData);
-        final sosEvent = SOSEvent.fromJson(response.data['data']['sosEvent']);
-        print('✅ SOS sent to server successfully');
-        return sosEvent;
-      } catch (e) {
-        print('❌ Server error: $e');
-        print('⚠️ Server unavailable, using offline mode');
-        
-        // Save to offline queue
-        final offlineSOS = await _saveOfflineSOS(sosData, userId, userName);
-        
-        // Propagate via Bluetooth mesh
-        if (_meshInitialized) {
-          await _meshService.propagateSOSAlert(offlineSOS);
-          print('📡 SOS propagated via Bluetooth mesh');
-        }
-        
-        return offlineSOS;
+      // Get token from SharedPreferences
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token') ?? '';
+      
+      if (token.isEmpty) {
+        print('❌ CRITICAL: No auth token found! Please log in again.');
+        throw Exception('Not logged in. Please log out and log back in to send SOS.');
       }
+      
+      print('🔄 Sending SOS to: ${ApiConfig.baseUrl}/sos');
+      print('🔑 Token: ${token.substring(0, 20)}...');
+      
+      final response = await _dio.post('/sos', data: sosData);
+      final sosEvent = SOSEvent.fromJson(response.data['data']['sosEvent']);
+      print('✅ SOS sent to server successfully');
+      return sosEvent;
     } catch (e) {
       print('❌ SOS trigger failed: $e');
       rethrow;
@@ -252,7 +251,10 @@ class SOSService {
       queryParameters: {'status': status},
     );
 
-    return (response.data['data']['sosEvents'] as List)
+    final sosEvents = response.data['data']['sosEvents'];
+    if (sosEvents == null) return [];
+    
+    return (sosEvents as List)
         .map((e) => SOSEvent.fromJson(e))
         .toList();
   }
@@ -260,7 +262,10 @@ class SOSService {
   Future<List<SOSEvent>> getAllAlerts() async {
     final response = await _dio.get('/sos');
 
-    return (response.data['data']['sosEvents'] as List)
+    final sosEvents = response.data['data']['sosEvents'];
+    if (sosEvents == null) return [];
+    
+    return (sosEvents as List)
         .map((e) => SOSEvent.fromJson(e))
         .toList();
   }
@@ -287,6 +292,25 @@ class SOSService {
         'notes': notes,
       },
     );
+  }
+
+  /// Get SOS history for current user
+  Future<List<SOSEvent>> getSOSHistory() async {
+    try {
+      final response = await _dio.get('/sos/');
+      
+      if (response.statusCode == 200) {
+        final data = response.data;
+        if (data['status'] == 'success') {
+          final List events = data['data']['events'] ?? [];
+          return events.map((json) => SOSEvent.fromJson(json)).toList();
+        }
+      }
+      return [];
+    } catch (e) {
+      print('Error fetching SOS history: $e');
+      return [];
+    }
   }
 
   Stream<List<SOSEvent>> get alertStream async* {

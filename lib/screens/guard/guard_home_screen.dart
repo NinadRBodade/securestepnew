@@ -2,6 +2,8 @@
 import 'package:flutter/material.dart';
 import '../../models/user_model.dart';
 import '../../services/auth_service.dart';
+import '../../config/api_config.dart';
+import '../splash_screen.dart';
 import 'guard_qr_scanner_screen.dart';
 import 'guard_active_agents_screen.dart';
 import 'guard_entry_logs_screen.dart';
@@ -361,9 +363,15 @@ class _GuardHomeScreenState extends State<GuardHomeScreen> {
             ),
             ElevatedButton(
               onPressed: () async {
-                Navigator.pop(context);
+                Navigator.pop(context); // Close dialog first
                 await AuthService.clearSession();
-                Navigator.of(context).popUntil((route) => route.isFirst);
+                ApiConfig.token = '';
+                if (context.mounted) {
+                  Navigator.of(context).pushAndRemoveUntil(
+                    MaterialPageRoute(builder: (context) => const SplashScreen()),
+                    (route) => false,
+                  );
+                }
               },
               style: ElevatedButton.styleFrom(
                 backgroundColor: Colors.red,

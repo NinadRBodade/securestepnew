@@ -32,6 +32,9 @@ class AuthService {
     await prefs.setString(_userSocietyIdKey, user.societyId);
     await prefs.setString(_userFlatNumberKey, user.flatNumber);
     
+    // Set token in ApiConfig for services
+    ApiConfig.setToken(token);
+    
     print('✅ Session saved: ${user.email} (${user.role})');
   }
 
@@ -85,6 +88,9 @@ class AuthService {
             token: token,
           );
           
+          // Set token in ApiConfig
+          ApiConfig.setToken(token);
+          
           print('✅ Session restored: ${user.email} (${user.role})');
           return user;
         }
@@ -116,6 +122,9 @@ class AuthService {
           token: token,
         );
         
+        // Set token in ApiConfig
+        ApiConfig.setToken(token);
+        
         print('✅ Using cached session: ${user.email} (${user.role})');
         return user;
       }
@@ -136,6 +145,9 @@ class AuthService {
     await prefs.remove(_userPhoneKey);
     await prefs.remove(_userSocietyIdKey);
     await prefs.remove(_userFlatNumberKey);
+    
+    // Clear token from ApiConfig
+    ApiConfig.clearToken();
     
     print('✅ Session cleared');
   }

@@ -45,6 +45,7 @@ class _LoginScreenUnifiedState extends State<LoginScreenUnified> {
     setState(() => _isLoading = true);
 
     try {
+      print('🔄 Attempting login to: ${AppConstants.baseUrl}${AppConstants.authEndpoint}/login');
       final response = await http.post(
         Uri.parse('${AppConstants.baseUrl}${AppConstants.authEndpoint}/login'),
         headers: {'Content-Type': 'application/json'},
@@ -52,16 +53,20 @@ class _LoginScreenUnifiedState extends State<LoginScreenUnified> {
           'email': Validators.sanitizeEmail(_emailController.text),
           'password': _passwordController.text,
         }),
-      ).timeout(const Duration(seconds: 10));
+      ).timeout(const Duration(seconds: 30));
 
       final data = json.decode(response.body);
+      print('📥 Login response: ${response.statusCode} - ${response.body}');
 
       if (response.statusCode == 200 && data['success'] == true) {
         // Save JWT token for API calls
         final token = data['token'];
         if (token != null) {
           ApiConfig.setToken(token);
-          print('✅ JWT Token saved: ${token.substring(0, 30)}...');
+          print('✅ JWT Token saved to ApiConfig: ${token.substring(0, 30)}...');
+          print('✅ ApiConfig.token is now: ${ApiConfig.token.substring(0, 30)}...');
+        } else {
+          print('❌ WARNING: No token in response!');
         }
         
         // Successful login
@@ -87,7 +92,8 @@ class _LoginScreenUnifiedState extends State<LoginScreenUnified> {
       }
     } catch (e) {
       // Fallback to mock authentication for offline testing
-      _showError('Backend unavailable. Using mock login.');
+      print('❌ Login failed: $e');
+      _showError('Backend unavailable: $e. Using mock login.');
       _mockLogin();
     } finally {
       if (mounted) {
@@ -97,6 +103,7 @@ class _LoginScreenUnifiedState extends State<LoginScreenUnified> {
   }
 
   void _mockLogin() {
+    print('⚠️⚠️⚠️ USING MOCK LOGIN - NO TOKEN WILL BE AVAILABLE ⚠️⚠️⚠️');
     String email = _emailController.text.trim();
     String password = _passwordController.text;
     
