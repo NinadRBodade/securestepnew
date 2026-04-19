@@ -58,6 +58,9 @@ dependencies:
   
   # URL launcher for opening maps
   url_launcher: ^6.2.2
+  
+  # Socket.IO for real-time SOS alerts
+  socket_io_client: ^2.0.2
 
 dev_dependencies:
   flutter_test:

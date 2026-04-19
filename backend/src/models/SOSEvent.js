@@ -26,6 +26,12 @@ const sosEventSchema = new mongoose.Schema(
       enum: ['agent', 'resident', 'guard', 'admin']
     },
     
+    // Society information
+    societyId: {
+      type: String,
+      index: true
+    },
+    
     flatNumber: String,
     
     // Triggered timestamp (immutable - used for blockchain hash)
@@ -78,5 +84,6 @@ sosEventSchema.index({ sosId: 1 });
 sosEventSchema.index({ status: 1, createdAt: -1 });
 sosEventSchema.index({ userId: 1 });
 sosEventSchema.index({ guardId: 1 });
+sosEventSchema.index({ societyId: 1 });
 
 module.exports = mongoose.model('SOSEvent', sosEventSchema);

@@ -199,6 +199,39 @@ body {
     color: #dc2626;
 }
 
+/* Test Buttons for Dummy SOS */
+.test-buttons {
+    display: flex;
+    gap: 8px;
+    align-items: center;
+}
+
+.btn-test {
+    padding: 8px 12px;
+    background: #8b5cf6;
+    color: white;
+    border: none;
+    border-radius: 6px;
+    cursor: pointer;
+    font-size: 12px;
+    font-weight: 500;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.btn-test:hover {
+    background: #7c3aed;
+    transform: scale(1.05);
+}
+
+.btn-test.btn-danger {
+    background: #ef4444;
+}
+
+.btn-test.btn-danger:hover {
+    background: #dc2626;
+}
+
 .dropdown-item span {
     font-size: 16px;
 }

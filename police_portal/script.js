@@ -1,8 +1,22 @@
 // Police Dashboard - Real-time SOS Alert System
-// Configuration
+// Configuration - Dynamic based on current host
+const getBackendURL = () => {
+    // Get the current hostname and port
+    const hostname = window.location.hostname;
+    const protocol = window.location.protocol;
+    
+    // If accessing from localhost or 127.0.0.1, connect to localhost backend
+    if (hostname === 'localhost' || hostname === '127.0.0.1' || hostname === '0.0.0.0') {
+        return `${protocol}//localhost:5001`;
+    }
+    
+    // Otherwise, construct URL using current hostname with backend port
+    return `${protocol}//${hostname}:5001`;
+};
+
 const CONFIG = {
-    API_BASE_URL: 'http://192.168.1.59:5001/api',
-    SOCKET_URL: 'http://192.168.1.59:5001',
+    API_BASE_URL: `${getBackendURL()}/api`,
+    SOCKET_URL: getBackendURL(),
     DEFAULT_CENTER: { lat: 19.0760, lng: 72.8777 }, // Mumbai coordinates
     DEFAULT_ZOOM: 12
 };
@@ -69,6 +83,9 @@ function viewAllAlerts() {
 
 // Initialize dashboard
 document.addEventListener('DOMContentLoaded', function() {
+    console.log('🚀 Police Dashboard initializing...');
+    console.log('   API URL:', CONFIG.API_BASE_URL);
+    console.log('   Socket URL:', CONFIG.SOCKET_URL);
     initMap();
     initSocket();
     initDateTime();
@@ -101,13 +118,18 @@ function initMap() {
 
 // Initialize Socket.IO connection
 function initSocket() {
+    console.log('🔌 Connecting to Socket.IO at:', CONFIG.SOCKET_URL);
     socket = io(CONFIG.SOCKET_URL, {
         transports: ['websocket', 'polling']
     });
     
     socket.on('connect', () => {
-        console.log('✅ Connected to server');
+        console.log('✅ Connected to server at:', CONFIG.SOCKET_URL);
+        console.log('🔌 Socket ID:', socket.id);
         updateConnectionStatus(true);
+        // Join police room
+        socket.emit('join-police-room');
+        console.log('📍 Joined police room for alerts');
     });
     
     socket.on('disconnect', () => {
@@ -115,9 +137,14 @@ function initSocket() {
         updateConnectionStatus(false);
     });
     
+    socket.on('connect_error', (error) => {
+        console.error('❌ Connection error:', error);
+        console.error('   Backend URL: ', CONFIG.SOCKET_URL);
+    });
+    
     // Listen for police SOS alerts
     socket.on('police:sos-alert', (data) => {
-        console.log('🚨 NEW SOS ALERT received:', data);
+        console.log('🚨 NEW SOS ALERT received on police:sos-alert:', data);
         playAlertSound();
         
         // Format alert data with full user information
@@ -159,6 +186,39 @@ function initSocket() {
     socket.on('guard:arrived', (data) => {
         console.log('🚗 Guard arrived:', data);
         showNotification('Guard Arrived', `Guard ${data.guardName} has arrived at location`);
+    });
+    
+    // Fallback listener for generic SOS events (if broadcast goes to all instead of police room)
+    socket.on('sos:new', (data) => {
+        console.log('🚨 NEW SOS received on sos:new event (fallback):', data);
+        // Only process if we haven't seen this before
+        if (!alerts.find(a => a.sosId === (data.sosId || data._id))) {
+            playAlertSound();
+            
+            // Format alert data with full user information
+            const alert = {
+                _id: data._id || data.sosId,
+                sosId: data.sosId || data._id,
+                triggeredBy: data.triggeredBy || { name: 'Unknown User', phone: null },
+                flatNumber: data.flatNumber,
+                societyId: typeof data.societyId === 'string' ? 
+                    { name: data.societyId } : 
+                    data.societyId,
+                description: data.description || data.locationAddress,
+                status: data.status || 'triggered',
+                priority: data.priority || 'critical',
+                triggeredAt: data.triggeredAt,
+                location: data.location || (data.latitude && data.longitude ? {
+                    latitude: data.latitude,
+                    longitude: data.longitude,
+                    address: data.locationAddress
+                } : null),
+                locationAddress: data.locationAddress || data.description
+            };
+            
+            addNewAlert(alert);
+            showNotification('New Emergency Alert (Fallback)', `${alert.triggeredBy.name} - Flat ${alert.flatNumber}`);
+        }
     });
 }
 
@@ -810,4 +870,102 @@ function showNotification(title, body) {
 // Request notification permission on load
 if ("Notification" in window && Notification.permission === "default") {
     Notification.requestPermission();
+}
+
+// ============================================
+// TESTING FUNCTIONS - CREATE DUMMY SOS
+// ============================================
+
+// Emergency types for testing
+const emergencyTypes = ['Fire', 'Medical Emergency', 'Suspicious Person', 'Theft', 'Violence', 'Other'];
+
+// Create a single dummy SOS alert
+async function createDummySOS() {
+    try {
+        const randomType = emergencyTypes[Math.floor(Math.random() * emergencyTypes.length)];
+        const flatNumbers = ['A101', 'A102', 'B203', 'C304', 'D405', 'E506', 'F607', 'G708'];
+        const randomFlat = flatNumbers[Math.floor(Math.random() * flatNumbers.length)];
+        
+        console.log('🧪 Creating dummy SOS:', randomType, '@', randomFlat);
+        
+        const response = await fetch(
+            `${CONFIG.API_BASE_URL}/sos/test/dummy?type=${encodeURIComponent(randomType)}&flat=${randomFlat}`,
+            { method: 'POST' }
+        );
+        
+        if (!response.ok) {
+            throw new Error('Failed to create dummy SOS');
+        }
+        
+        const data = await response.json();
+        console.log('✅ Dummy SOS created:', data.data.sosEvent.sosId);
+        
+        showNotification('🧪 Test Alert', `Created dummy ${randomType} at ${randomFlat}`);
+    } catch (error) {
+        console.error('❌ Failed to create dummy SOS:', error);
+        alert('❌ Failed to create dummy SOS: ' + error.message);
+    }
+}
+
+// Create multiple dummy SOS alerts
+async function createMultipleDummySOS(count = 3) {
+    try {
+        console.log(`🧪 Creating ${count} dummy SOS alerts...`);
+        
+        for (let i = 0; i < count; i++) {
+            await new Promise(resolve => setTimeout(resolve, 500)); // 500ms delay between alerts
+            await createDummySOS();
+        }
+        
+        console.log(`✅ Created ${count} dummy SOS alerts`);
+        showNotification('🧪 Bulk Test', `Created ${count} test alerts`);
+    } catch (error) {
+        console.error('❌ Failed to create multiple dummy SOS:', error);
+    }
+}
+
+// Clear all SOS events from database
+async function clearAllSOS() {
+    if (!confirm('⚠️ Are you sure you want to clear all SOS events? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        console.log('🧹 Clearing all SOS events...');
+        
+        const response = await fetch(`${CONFIG.API_BASE_URL}/sos/test/clear-all`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to clear SOS events');
+        }
+        
+        const data = await response.json();
+        console.log(`✅ Cleared ${data.data.deletedCount} SOS events`);
+        
+        // Clear local alerts
+        alerts = [];
+        renderAlerts();
+        updateStats();
+        clearMarkers();
+        
+        showNotification('🧹 Cleared', `Deleted ${data.data.deletedCount} alerts`);
+    } catch (error) {
+        console.error('❌ Failed to clear all SOS:', error);
+        alert('❌ Failed to clear SOS events: ' + error.message);
+    }
+}
+
+// Helper function to clear all map markers
+function clearMarkers() {
+    Object.keys(markers).forEach(sosId => {
+        if (markers[sosId]) {
+            markers[sosId].setMap(null);
+            if (markers[sosId].infoWindow) {
+                markers[sosId].infoWindow.close();
+            }
+        }
+    });
+    markers = {};
 }

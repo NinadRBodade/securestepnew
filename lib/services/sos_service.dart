@@ -6,6 +6,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../models/sos_event_model.dart';
 import '../config/api_config.dart';
 import 'bluetooth_mesh_service.dart';
+import 'socket_service.dart';
+import 'dart:async';
 
 class SOSService {
   final Dio _dio = Dio(
@@ -314,9 +316,40 @@ class SOSService {
   }
 
   Stream<List<SOSEvent>> get alertStream async* {
-    while (true) {
-      await Future.delayed(Duration(seconds: 5));
-      yield await getAllAlerts();
+    final socketService = SocketService();
+    
+    // Check if we need to connect to Socket.IO
+    if (!socketService.isConnected) {
+      // Try to get auth token and connect
+      final prefs = await SharedPreferences.getInstance();
+      final token = prefs.getString('auth_token') ?? '';
+      
+      if (token.isNotEmpty) {
+        try {
+          await socketService.connect(token);
+          print('✅ Socket.IO connected for real-time SOS alerts');
+        } catch (e) {
+          print('⚠️ Could not connect Socket.IO: $e, falling back to polling');
+        }
+      }
+    }
+    
+    // Stream real-time alerts from Socket.IO if connected
+    if (socketService.isConnected) {
+      yield* socketService.sosAlerts;
+    } else {
+      // Fallback to polling if Socket.IO is not available
+      print('⚠️ Using polling for SOS alerts (Socket.IO unavailable)');
+      while (true) {
+        await Future.delayed(Duration(seconds: 5));
+        try {
+          final alerts = await getAllAlerts();
+          yield alerts;
+        } catch (e) {
+          print('Error polling alerts: $e');
+          yield [];
+        }
+      }
     }
   }
 }

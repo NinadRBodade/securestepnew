@@ -1,7 +1,7 @@
 // Agent Verification Portal - JavaScript
 // Configuration
 const CONFIG = {
-    API_BASE_URL: 'http://192.168.1.59:5001/api',
+    API_BASE_URL: 'http://localhost:5001/api',
     DEFAULT_SCORE: 75
 };
 
@@ -54,7 +54,7 @@ async function loadAgents() {
     try {
         showLoading();
         
-        const response = await fetch(`${CONFIG.API_BASE_URL}/agents`);
+        const response = await fetch(`${CONFIG.API_BASE_URL}/agents/all`);
         
         if (!response.ok) {
             throw new Error('Failed to load agents');

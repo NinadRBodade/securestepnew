@@ -2,8 +2,10 @@ import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:path_provider/path_provider.dart';
-import 'dart:io';
+import 'dart:io' as io;
 import 'package:path/path.dart' as path;
+import 'package:flutter/foundation.dart';
+import 'package:http/http.dart' as http;
 import '../../utils/constants.dart';
 
 class ResidentFaceRegistrationScreen extends StatefulWidget {
@@ -17,7 +19,7 @@ class ResidentFaceRegistrationScreen extends StatefulWidget {
 
 class _ResidentFaceRegistrationScreenState extends State<ResidentFaceRegistrationScreen> {
   CameraController? _cameraController;
-  final FaceDetector _faceDetector = FaceDetector(
+  final FaceDetector? _faceDetector = kIsWeb ? null : FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
@@ -80,9 +82,39 @@ class _ResidentFaceRegistrationScreenState extends State<ResidentFaceRegistratio
     try {
       final image = await _cameraController!.takePicture();
       
-      // Detect face
+      if (kIsWeb) {
+        // Skip ML Kit on web, just track the capture
+        print('🌐 Running on Web: Skipping ML Kit face detection');
+        _capturedImages.add(image.path);
+        _captureCount++;
+        
+        if (_captureCount < 3) {
+          setState(() {
+            _statusMessage = 'Good! Capture ${3 - _captureCount} more times';
+            _faceDetected = true;
+            _isProcessing = false;
+          });
+          await Future.delayed(Duration(milliseconds: 500));
+          setState(() {
+            _faceDetected = false;
+          });
+          return;
+        } else {
+          setState(() {
+            _statusMessage = 'Face registered successfully! ✓';
+            _faceDetected = true;
+            _capturedImagePath = image.path;
+          });
+          await Future.delayed(Duration(seconds: 1));
+          if (mounted) _showSuccessDialog();
+          return;
+        }
+      }
+
+      // 📱 Mobile Flow (Android/iOS)
+      // Detect face using ML Kit
       final inputImage = InputImage.fromFilePath(image.path);
-      final faces = await _faceDetector.processImage(inputImage);
+      final faces = await _faceDetector!.processImage(inputImage);
 
       if (faces.isEmpty) {
         setState(() {
@@ -189,9 +221,10 @@ class _ResidentFaceRegistrationScreenState extends State<ResidentFaceRegistratio
   }
 
   Future<void> _saveFaceImages() async {
+    if (kIsWeb) return; // Skip local file system save on web
     try {
       final directory = await getApplicationDocumentsDirectory();
-      final facesDir = Directory('${directory.path}/resident_faces');
+      final facesDir = io.Directory('${directory.path}/resident_faces');
       
       if (!await facesDir.exists()) {
         await facesDir.create(recursive: true);
@@ -201,7 +234,7 @@ class _ResidentFaceRegistrationScreenState extends State<ResidentFaceRegistratio
       for (int i = 0; i < _capturedImages.length; i++) {
         final fileName = '${widget.residentEmail.replaceAll('@', '_at_')}_$i.jpg';
         final savedPath = path.join(facesDir.path, fileName);
-        await File(_capturedImages[i]).copy(savedPath);
+        await io.File(_capturedImages[i]).copy(savedPath);
       }
     } catch (e) {
       throw Exception('Failed to save face images');
@@ -248,7 +281,7 @@ class _ResidentFaceRegistrationScreenState extends State<ResidentFaceRegistratio
   @override
   void dispose() {
     _cameraController?.dispose();
-    _faceDetector.close();
+    _faceDetector?.close();
     super.dispose();
   }
 

@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:convert';
 import 'dart:async';
+import 'package:flutter/foundation.dart';
 import 'package:http/http.dart' as http;
 import '../../utils/constants.dart';
 import '../../services/face_recognition_service.dart';
@@ -18,7 +19,7 @@ class ResidentScanAgentFaceScreen extends StatefulWidget {
 
 class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScreen> {
   CameraController? _cameraController;
-  final FaceDetector _faceDetector = FaceDetector(
+  final FaceDetector? _faceDetector = kIsWeb ? null : FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
@@ -125,26 +126,30 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
       // Capture image
       final image = await _cameraController!.takePicture();
       
-      // Detect face in captured image
-      final inputImage = InputImage.fromFilePath(image.path);
-      final faces = await _faceDetector.processImage(inputImage);
+      if (!kIsWeb) {
+        // Detect face in captured image (Mobile only)
+        final inputImage = InputImage.fromFilePath(image.path);
+        final faces = await _faceDetector!.processImage(inputImage);
 
-      if (faces.isEmpty) {
-        setState(() {
-          _statusMessage = 'No face detected. Please try again.';
-          _faceDetected = false;
-          _isProcessing = false;
-        });
-        return;
-      }
+        if (faces.isEmpty) {
+          setState(() {
+            _statusMessage = 'No face detected. Please try again.';
+            _faceDetected = false;
+            _isProcessing = false;
+          });
+          return;
+        }
 
-      if (faces.length > 1) {
-        setState(() {
-          _statusMessage = 'Multiple faces detected. Please ensure only one person.';
-          _faceDetected = false;
-          _isProcessing = false;
-        });
-        return;
+        if (faces.length > 1) {
+          setState(() {
+            _statusMessage = 'Multiple faces detected. Please ensure only one person.';
+            _faceDetected = false;
+            _isProcessing = false;
+          });
+          return;
+        }
+      } else {
+        print('🌐 Running on Web: Skipping ML Kit face detect before verification');
       }
 
       // Get all registered agents from backend
@@ -165,8 +170,9 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
         
         print('📥 Response status: ${response.statusCode}');
         print('📦 Response body: ${response.body}');
-      } on SocketException catch (e) {
-        print('❌ Network Error: No internet connection - $e');
+      } catch (e) {
+        // Handle network errors generically for web compatibility
+        print('❌ Network Error: $e');
         setState(() {
           _statusMessage = 'No internet connection';
           _isProcessing = false;
@@ -271,9 +277,11 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
       });
 
       // Clean up captured image
-      final capturedFile = File(image.path);
-      if (await capturedFile.exists()) {
-        await capturedFile.delete();
+      if (!kIsWeb) {
+        final capturedFile = io.File(image.path);
+        if (await capturedFile.exists()) {
+          await capturedFile.delete();
+        }
       }
 
       // Navigate to result screen if agent found
@@ -432,7 +440,7 @@ class _ResidentScanAgentFaceScreenState extends State<ResidentScanAgentFaceScree
   @override
   void dispose() {
     _cameraController?.dispose();
-    _faceDetector.close();
+    _faceDetector?.close();
     super.dispose();
   }
 

@@ -2,14 +2,16 @@ import 'package:flutter/material.dart';
 import 'package:qr_flutter/qr_flutter.dart';
 import 'package:http/http.dart' as http;
 import '../../utils/constants.dart';
+import '../../models/user_model.dart';
 import 'dart:convert';
 import 'package:crypto/crypto.dart';
 
 // Agent QR Code screen - Shows agent's unique QR code
 class AgentQRScreen extends StatefulWidget {
   final String agentEmail;
+  final UserModel? mockUser;
   
-  const AgentQRScreen({super.key, required this.agentEmail});
+  const AgentQRScreen({super.key, required this.agentEmail, this.mockUser});
 
   @override
   State<AgentQRScreen> createState() => _AgentQRScreenState();
@@ -27,6 +29,23 @@ class _AgentQRScreenState extends State<AgentQRScreen> {
   }
 
   Future<void> _loadAgentData() async {
+    if (widget.mockUser != null) {
+      setState(() {
+        _agentData = {
+          'id': widget.mockUser!.id ?? 'DEMO_ID',
+          'name': widget.mockUser!.name,
+          'email': widget.mockUser!.email,
+          'phone': widget.mockUser!.phone,
+          'company': 'SecureStep Demo',
+          'verified': true, // Mock as verified for demo QR
+          'score': 4.8,
+        };
+        _isLoading = false;
+        _errorMessage = null;
+      });
+      return;
+    }
+
     setState(() {
       _isLoading = true;
       _errorMessage = null;

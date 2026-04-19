@@ -3,9 +3,10 @@ import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:convert';
 import 'package:path/path.dart' as path;
+import 'package:flutter/foundation.dart';
 import '../../utils/constants.dart';
 
 class AgentFaceRegistrationScreen extends StatefulWidget {
@@ -19,7 +20,7 @@ class AgentFaceRegistrationScreen extends StatefulWidget {
 
 class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScreen> {
   CameraController? _cameraController;
-  final FaceDetector _faceDetector = FaceDetector(
+  final FaceDetector? _faceDetector = kIsWeb ? null : FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
@@ -80,9 +81,26 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
     try {
       final image = await _cameraController!.takePicture();
       
-      // Detect face
+      if (kIsWeb) {
+        // Skip ML Kit on web, just upload the image
+        print('🌐 Running on Web: Skipping ML Kit face detection');
+        await _uploadFaceToBackend(image);
+        
+        setState(() {
+          _statusMessage = 'Face captured successfully! ✓';
+          _faceDetected = true;
+          _capturedImagePath = image.path;
+        });
+
+        await Future.delayed(Duration(seconds: 1));
+        if (mounted) _showSuccessDialog();
+        return;
+      }
+
+      // 📱 Mobile Flow (Android/iOS)
+      // Detect face using ML Kit
       final inputImage = InputImage.fromFilePath(image.path);
-      final faces = await _faceDetector.processImage(inputImage);
+      final faces = await _faceDetector!.processImage(inputImage);
 
       if (faces.isEmpty) {
         setState(() {
@@ -127,7 +145,7 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
       print('✅ Face detected, saving locally...');
       await _saveFaceImage(image.path);
       print('✅ Local save complete, uploading to backend...');
-      await _uploadFaceToBackend(image.path);
+      await _uploadFaceToBackend(image);
       print('✅ Face registration process complete');
       
       setState(() {
@@ -156,11 +174,12 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
   }
 
   Future<void> _saveFaceImage(String imagePath) async {
+    if (kIsWeb) return; // Skip local file system save on web
     try {
       print('💾 Saving face image locally...');
       final directory = await getApplicationDocumentsDirectory();
       print('   App directory: ${directory.path}');
-      final facesDir = Directory('${directory.path}/agent_faces');
+      final facesDir = io.Directory('${directory.path}/agent_faces');
       
       if (!await facesDir.exists()) {
         print('   Creating agent_faces directory...');
@@ -171,7 +190,7 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
       final savedPath = path.join(facesDir.path, fileName);
       print('   Saving to: $savedPath');
       
-      await File(imagePath).copy(savedPath);
+      await io.File(imagePath).copy(savedPath);
       print('   ✅ Local save successful');
     } catch (e) {
       print('   ❌ Local save failed: $e');
@@ -179,12 +198,11 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
     }
   }
 
-  Future<void> _uploadFaceToBackend(String imagePath) async {
+  Future<void> _uploadFaceToBackend(XFile image) async {
     try {
       print('📤 Uploading face to backend...');
       print('   URL: ${AppConstants.baseUrl}/api/face/upload');
       print('   Email: ${widget.agentEmail}');
-      print('   Image path: $imagePath');
       
       var request = http.MultipartRequest(
         'POST',
@@ -194,10 +212,19 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
       request.fields['email'] = widget.agentEmail;
       request.fields['role'] = 'agent';
 
-      request.files.add(await http.MultipartFile.fromPath(
-        'faceImage',
-        imagePath,
-      ));
+      if (kIsWeb) {
+        final bytes = await image.readAsBytes();
+        request.files.add(http.MultipartFile.fromBytes(
+          'faceImage',
+          bytes,
+          filename: '${widget.agentEmail}_face.jpg',
+        ));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath(
+          'faceImage',
+          image.path,
+        ));
+      }
 
       print('   Sending request...');
       var response = await request.send().timeout(Duration(seconds: 30));
@@ -257,7 +284,7 @@ class _AgentFaceRegistrationScreenState extends State<AgentFaceRegistrationScree
   @override
   void dispose() {
     _cameraController?.dispose();
-    _faceDetector.close();
+    _faceDetector?.close();
     super.dispose();
   }
 

@@ -507,7 +507,7 @@ class _AgentHomeScreenState extends State<AgentHomeScreen> with TickerProviderSt
             Navigator.push(
               context,
               MaterialPageRoute(
-                builder: (context) => const UploadDocumentsScreen(),
+                builder: (context) => UploadDocumentsScreen(user: widget.user),
               ),
             );
           },

@@ -54,6 +54,12 @@ router.get('/police/:sosId', sosController.getSOSById);
 // Verify SOS blockchain hash (PUBLIC - for transparency)
 router.get('/:sosId/verify', sosController.verifySOS);
 
+// Create dummy SOS for testing (PUBLIC - for testing only)
+router.post('/test/dummy', sosController.createDummySOS);
+
+// Clear all SOS events (PUBLIC - for testing only)
+router.delete('/test/clear-all', sosController.clearAllSOS);
+
 // ============================================
 // PROTECTED ROUTES (Authentication required)
 // ============================================

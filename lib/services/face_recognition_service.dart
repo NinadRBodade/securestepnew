@@ -1,18 +1,20 @@
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:math';
 import 'dart:ui';
 import 'dart:convert';
+import 'package:flutter/foundation.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
 import '../utils/constants.dart';
+import 'package:camera/camera.dart'; // For XFile
 
 class FaceRecognitionService {
   static final FaceRecognitionService _instance = FaceRecognitionService._internal();
   factory FaceRecognitionService() => _instance;
   FaceRecognitionService._internal();
 
-  final FaceDetector _faceDetector = FaceDetector(
+  final FaceDetector? _faceDetector = kIsWeb ? null : FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
@@ -41,10 +43,21 @@ class FaceRecognitionService {
       );
       
       request.fields['email'] = userEmail;
-      request.files.add(await http.MultipartFile.fromPath(
-        'capturedImage',
-        capturedImagePath,
-      ));
+      
+      if (kIsWeb) {
+        // MultiPartFile.fromPath doesn't work well with blob URLs on all browsers
+        // Use bytes if possible. Since we only have the path here, we'll try a generic approach
+        // Note: For full web support, verification screens should pass XFile or bytes
+        request.files.add(await http.MultipartFile.fromPath(
+          'capturedImage',
+          capturedImagePath,
+        ));
+      } else {
+        request.files.add(await http.MultipartFile.fromPath(
+          'capturedImage',
+          capturedImagePath,
+        ));
+      }
       
       print('📤 Sending verification request...');
       var response = await request.send().timeout(Duration(seconds: 30));
@@ -106,7 +119,7 @@ class FaceRecognitionService {
 
       // Detect face in captured image
       final capturedImage = InputImage.fromFilePath(capturedImagePath);
-      final capturedFaces = await _faceDetector.processImage(capturedImage);
+      final capturedFaces = await _faceDetector!.processImage(capturedImage);
       
       if (capturedFaces.isEmpty) {
         return 0; // No face in captured image
@@ -134,6 +147,7 @@ class FaceRecognitionService {
 
   /// Download face from backend if not available locally
   Future<String?> downloadFaceFromBackend(String email) async {
+    if (kIsWeb) return null; // Skip local download on web
     try {
       print('🔍 Attempting to download face from backend for: $email');
       final response = await http.get(
@@ -143,7 +157,7 @@ class FaceRecognitionService {
       if (response.statusCode == 200) {
         // Save image locally
         final directory = await getApplicationDocumentsDirectory();
-        final facesDir = Directory('${directory.path}/agent_faces_backend');
+        final facesDir = io.Directory('${directory.path}/agent_faces_backend');
         
         if (!await facesDir.exists()) {
           await facesDir.create(recursive: true);
@@ -152,7 +166,7 @@ class FaceRecognitionService {
         final fileName = '${email.replaceAll('@', '_at_')}_backend.jpg';
         final filePath = '${facesDir.path}/$fileName';
         
-        final file = File(filePath);
+        final file = io.File(filePath);
         await file.writeAsBytes(response.bodyBytes);
         
         print('✅ Face downloaded from backend: $filePath');
@@ -170,6 +184,7 @@ class FaceRecognitionService {
   /// Get all registered face image paths for a user
   /// First checks backend, then falls back to local storage
   Future<List<String>> _getRegisteredFaces(String userType, String userEmail) async {
+    if (kIsWeb) return []; // Local faces not supported on web
     try {
       List<String> faces = [];
       
@@ -191,13 +206,13 @@ class FaceRecognitionService {
       ];
       
       for (var dirPath in directories) {
-        final facesDir = Directory(dirPath);
-        if (await facesDir.exists()) {
+        final facesDir = io.Directory(dirPath);
+        if (!kIsWeb && await facesDir.exists()) {
           final emailPrefix = userEmail.replaceAll('@', '_at_');
           final files = await facesDir.list().toList();
           
           final matchingFiles = files
-              .where((file) => file is File && file.path.contains(emailPrefix))
+              .where((file) => file is io.File && file.path.contains(emailPrefix))
               .map((file) => file.path)
               .toList();
           
@@ -222,7 +237,7 @@ class FaceRecognitionService {
     try {
       // Detect face in registered image
       final registeredImage = InputImage.fromFilePath(registeredPath);
-      final registeredFaces = await _faceDetector.processImage(registeredImage);
+      final registeredFaces = await _faceDetector!.processImage(registeredImage);
       
       if (registeredFaces.isEmpty) {
         return 0;
@@ -367,10 +382,11 @@ class FaceRecognitionService {
 
   /// Delete registered faces for a user
   Future<void> deleteRegisteredFaces(String userType, String userEmail) async {
+    if (kIsWeb) return;
     try {
       final faces = await _getRegisteredFaces(userType, userEmail);
       for (String facePath in faces) {
-        final file = File(facePath);
+        final file = io.File(facePath);
         if (await file.exists()) {
           await file.delete();
         }
@@ -381,6 +397,6 @@ class FaceRecognitionService {
   }
 
   void dispose() {
-    _faceDetector.close();
+    _faceDetector?.close();
   }
 }

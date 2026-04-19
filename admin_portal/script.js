@@ -141,7 +141,7 @@ async function loadDashboardStats() {
         // Load all data
         const [societiesRes, guardsRes, agentsRes, sosRes] = await Promise.all([
             fetch(`${CONFIG.API_BASE_URL}/societies`).catch(() => ({json: () => ({societies: []})})),
-            fetch(`${CONFIG.API_BASE_URL}/guards`).catch(() => ({json: () => ({guards: []})})),
+            fetch(`${CONFIG.API_BASE_URL}/admin/guards`).catch(() => ({json: () => ({guards: []})})),
             fetch(`${CONFIG.API_BASE_URL}/agents/all`).catch(() => ({json: () => ({agents: []})})),
             fetch(`${CONFIG.API_BASE_URL}/sos`).catch(() => ({json: () => ({alerts: []})}))
         ]);
@@ -1547,5 +1547,66 @@ async function quickReject(verificationId) {
         }
     } catch (error) {
         console.error('Error:', error);
+    }
+}
+
+// ============================================
+// TESTING FUNCTIONS - CREATE DUMMY SOS
+// ============================================
+
+const emergencyTypes = ['Fire', 'Medical Emergency', 'Suspicious Person', 'Theft', 'Violence', 'Other'];
+
+// Create a single dummy SOS alert
+async function createDummySOS() {
+    try {
+        const randomType = emergencyTypes[Math.floor(Math.random() * emergencyTypes.length)];
+        const flatNumbers = ['A101', 'A102', 'B203', 'C304', 'D405', 'E506', 'F607', 'G708'];
+        const randomFlat = flatNumbers[Math.floor(Math.random() * flatNumbers.length)];
+        
+        console.log('🧪 Creating dummy SOS:', randomType, '@', randomFlat);
+        
+        const response = await fetch(
+            `${CONFIG.API_BASE_URL}/sos/test/dummy?type=${encodeURIComponent(randomType)}&flat=${randomFlat}`,
+            { method: 'POST' }
+        );
+        
+        if (!response.ok) {
+            throw new Error('Failed to create dummy SOS');
+        }
+        
+        const data = await response.json();
+        console.log('✅ Dummy SOS created:', data.data.sosEvent.sosId);
+        alert(`✅ Created dummy ${randomType} at ${randomFlat}`);
+        loadSOSAlerts();
+    } catch (error) {
+        console.error('❌ Failed to create dummy SOS:', error);
+        alert('❌ Failed to create dummy SOS: ' + error.message);
+    }
+}
+
+// Clear all SOS events from database
+async function clearAllSOS() {
+    if (!confirm('⚠️ Are you sure you want to clear all SOS events? This cannot be undone.')) {
+        return;
+    }
+    
+    try {
+        console.log('🧹 Clearing all SOS events...');
+        
+        const response = await fetch(`${CONFIG.API_BASE_URL}/sos/test/clear-all`, {
+            method: 'DELETE'
+        });
+        
+        if (!response.ok) {
+            throw new Error('Failed to clear SOS events');
+        }
+        
+        const data = await response.json();
+        console.log(`✅ Cleared ${data.data.deletedCount} SOS events`);
+        alert(`✅ Cleared ${data.data.deletedCount} SOS events`);
+        loadSOSAlerts();
+    } catch (error) {
+        console.error('❌ Failed to clear all SOS:', error);
+        alert('❌ Failed to clear SOS events: ' + error.message);
     }
 }

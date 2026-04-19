@@ -6,7 +6,7 @@
     <title>Police Dashboard - Society Safety System</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.socket.io/4.7.5/socket.io.min.js"></script>
-    <script src="https://maps.googleapis.com/maps/api/js?key=[Add Your API Key ]"></script>
+    <script src="https://maps.googleapis.com/maps/api/js?key=AIzaSyBrxlR_2bfzg7z2kgzqHmtX45HlGxzN0iw&callback=initMap" async defer></script>
 </head>
 <body>
     <div class="dashboard-container">
@@ -33,6 +33,17 @@
                     <span>Disconnected</span>
                 </div>
                 <div class="datetime" id="current-datetime"></div>
+                <div class="test-buttons">
+                    <button class="btn-test" onclick="createDummySOS()" title="Add test SOS alert">
+                        🧪 Dummy SOS
+                    </button>
+                    <button class="btn-test" onclick="createMultipleDummySOS(3)" title="Add 3 test SOS alerts">
+                        🧪 ×3 SOS
+                    </button>
+                    <button class="btn-test btn-danger" onclick="clearAllSOS()" title="Clear all alerts">
+                        🧹 Clear All
+                    </button>
+                </div>
                 <div class="user-menu-container">
                     <div class="user-menu" onclick="toggleUserMenu()">👤</div>
                     <div class="user-dropdown" id="user-dropdown">

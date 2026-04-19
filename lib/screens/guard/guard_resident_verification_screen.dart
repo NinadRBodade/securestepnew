@@ -1,7 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
-import 'dart:io';
+import 'dart:io' as io;
+import 'package:flutter/foundation.dart';
 import '../../utils/constants.dart';
 import '../../services/face_recognition_service.dart';
 import '../../services/mock_data_service.dart';
@@ -15,7 +16,7 @@ class GuardResidentVerificationScreen extends StatefulWidget {
 
 class _GuardResidentVerificationScreenState extends State<GuardResidentVerificationScreen> {
   CameraController? _cameraController;
-  final FaceDetector _faceDetector = FaceDetector(
+  final FaceDetector? _faceDetector = kIsWeb ? null : FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
@@ -81,26 +82,30 @@ class _GuardResidentVerificationScreenState extends State<GuardResidentVerificat
       // Capture image
       final image = await _cameraController!.takePicture();
       
-      // Detect face in captured image
-      final inputImage = InputImage.fromFilePath(image.path);
-      final faces = await _faceDetector.processImage(inputImage);
+      if (!kIsWeb) {
+        // Detect face in captured image (Mobile only)
+        final inputImage = InputImage.fromFilePath(image.path);
+        final faces = await _faceDetector!.processImage(inputImage);
 
-      if (faces.isEmpty) {
-        setState(() {
-          _statusMessage = 'No face detected. Please try again.';
-          _faceDetected = false;
-          _isProcessing = false;
-        });
-        return;
-      }
+        if (faces.isEmpty) {
+          setState(() {
+            _statusMessage = 'No face detected. Please try again.';
+            _faceDetected = false;
+            _isProcessing = false;
+          });
+          return;
+        }
 
-      if (faces.length > 1) {
-        setState(() {
-          _statusMessage = 'Multiple faces detected. Please ensure only one person.';
-          _faceDetected = false;
-          _isProcessing = false;
-        });
-        return;
+        if (faces.length > 1) {
+          setState(() {
+            _statusMessage = 'Multiple faces detected. Please ensure only one person.';
+            _faceDetected = false;
+            _isProcessing = false;
+          });
+          return;
+        }
+      } else {
+        print('🌐 Running on Web: Skipping ML Kit face detect before verification');
       }
 
       // Get all registered residents
@@ -145,9 +150,11 @@ class _GuardResidentVerificationScreenState extends State<GuardResidentVerificat
       }
 
       // Clean up captured image
-      final capturedFile = File(image.path);
-      if (await capturedFile.exists()) {
-        await capturedFile.delete();
+      if (!kIsWeb) {
+        final capturedFile = io.File(image.path);
+        if (await capturedFile.exists()) {
+          await capturedFile.delete();
+        }
       }
 
       // Show result
@@ -380,7 +387,7 @@ class _GuardResidentVerificationScreenState extends State<GuardResidentVerificat
   @override
   void dispose() {
     _cameraController?.dispose();
-    _faceDetector.close();
+    _faceDetector?.close();
     super.dispose();
   }
 

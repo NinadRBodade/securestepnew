@@ -1,9 +1,10 @@
 import 'package:flutter/material.dart';
 import 'package:camera/camera.dart';
 import 'package:google_mlkit_face_detection/google_mlkit_face_detection.dart';
+import 'package:flutter/foundation.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
-import 'dart:io';
+import 'dart:io' as io;
 import 'dart:math';
 import 'dart:convert';
 import '../../utils/constants.dart';
@@ -24,7 +25,7 @@ class ResidentFaceVerificationScreen extends StatefulWidget {
 
 class _ResidentFaceVerificationScreenState extends State<ResidentFaceVerificationScreen> {
   CameraController? _cameraController;
-  final FaceDetector _faceDetector = FaceDetector(
+  final FaceDetector? _faceDetector = kIsWeb ? null : FaceDetector(
     options: FaceDetectorOptions(
       enableClassification: true,
       enableLandmarks: true,
@@ -86,26 +87,30 @@ class _ResidentFaceVerificationScreenState extends State<ResidentFaceVerificatio
       // Capture image
       final image = await _cameraController!.takePicture();
       
-      // Detect face in captured image
-      final inputImage = InputImage.fromFilePath(image.path);
-      final faces = await _faceDetector.processImage(inputImage);
+      if (!kIsWeb) {
+        // Detect face in captured image (Mobile only)
+        final inputImage = InputImage.fromFilePath(image.path);
+        final faces = await _faceDetector!.processImage(inputImage);
 
-      if (faces.isEmpty) {
-        setState(() {
-          _statusMessage = 'No face detected. Please try again.';
-          _faceDetected = false;
-          _isProcessing = false;
-        });
-        return;
-      }
+        if (faces.isEmpty) {
+          setState(() {
+            _statusMessage = 'No face detected. Please try again.';
+            _faceDetected = false;
+            _isProcessing = false;
+          });
+          return;
+        }
 
-      if (faces.length > 1) {
-        setState(() {
-          _statusMessage = 'Multiple faces detected. Please ensure only one person.';
-          _faceDetected = false;
-          _isProcessing = false;
-        });
-        return;
+        if (faces.length > 1) {
+          setState(() {
+            _statusMessage = 'Multiple faces detected. Please ensure only one person.';
+            _faceDetected = false;
+            _isProcessing = false;
+          });
+          return;
+        }
+      } else {
+        print('🌐 Running on Web: Skipping ML Kit face detect before verification');
       }
 
       // Get registered face
@@ -156,8 +161,8 @@ class _ResidentFaceVerificationScreenState extends State<ResidentFaceVerificatio
       final fileName = '${widget.agentEmail.replaceAll('@', '_at_')}.jpg';
       final filePath = '${directory.path}/agent_faces/$fileName';
       
-      final file = File(filePath);
-      if (await file.exists()) {
+      final file = io.File(filePath);
+      if (!kIsWeb && await file.exists()) {
         return filePath;
       }
       return null;
@@ -175,16 +180,16 @@ class _ResidentFaceVerificationScreenState extends State<ResidentFaceVerificatio
       if (response.statusCode == 200) {
         // Save image locally
         final directory = await getApplicationDocumentsDirectory();
-        final facesDir = Directory('${directory.path}/agent_faces_backend');
+        final facesDir = io.Directory('${directory.path}/agent_faces_backend');
         
-        if (!await facesDir.exists()) {
+        if (!kIsWeb && !await facesDir.exists()) {
           await facesDir.create(recursive: true);
         }
 
         final fileName = '${widget.agentEmail.replaceAll('@', '_at_')}_backend.jpg';
         final filePath = '${facesDir.path}/$fileName';
         
-        final file = File(filePath);
+        final file = io.File(filePath);
         await file.writeAsBytes(response.bodyBytes);
         
         print('✅ Face downloaded from backend');
@@ -198,12 +203,18 @@ class _ResidentFaceVerificationScreenState extends State<ResidentFaceVerificatio
   }
 
   Future<int> _compareFaces(String capturedPath, String registeredPath) async {
+    if (kIsWeb) {
+      // Mock high similarity for web demo
+      print('🌐 Running on Web: Mocking face comparison score');
+      return 95;
+    }
+    
     // Detect faces in both images
     final capturedImage = InputImage.fromFilePath(capturedPath);
     final registeredImage = InputImage.fromFilePath(registeredPath);
     
-    final capturedFaces = await _faceDetector.processImage(capturedImage);
-    final registeredFaces = await _faceDetector.processImage(registeredImage);
+    final capturedFaces = await _faceDetector!.processImage(capturedImage);
+    final registeredFaces = await _faceDetector!.processImage(registeredImage);
     
     if (capturedFaces.isEmpty || registeredFaces.isEmpty) {
       return 0;
@@ -403,7 +414,7 @@ class _ResidentFaceVerificationScreenState extends State<ResidentFaceVerificatio
   @override
   void dispose() {
     _cameraController?.dispose();
-    _faceDetector.close();
+    _faceDetector?.close();
     super.dispose();
   }
 

@@ -1,7 +1,11 @@
 import 'package:flutter/material.dart';
+import '../../models/user_model.dart';
+import 'agent_qr_screen.dart';
 
 class UploadDocumentsScreen extends StatefulWidget {
-  const UploadDocumentsScreen({Key? key}) : super(key: key);
+  final UserModel user;
+  
+  const UploadDocumentsScreen({Key? key, required this.user}) : super(key: key);
 
   @override
   State<UploadDocumentsScreen> createState() => _UploadDocumentsScreenState();
@@ -102,12 +106,26 @@ class _UploadDocumentsScreenState extends State<UploadDocumentsScreen> {
             style: TextStyle(fontSize: 15),
           ),
           actions: [
-            TextButton(
+            ElevatedButton(
               onPressed: () {
-                Navigator.pop(context);
-                Navigator.pop(context);
+                Navigator.pop(context); // Close dialog
+                // Navigate to QR screen with mock data
+                Navigator.pushReplacement(
+                  context,
+                  MaterialPageRoute(
+                    builder: (context) => AgentQRScreen(
+                      agentEmail: widget.user.email,
+                      mockUser: widget.user,
+                    ),
+                  ),
+                );
               },
-              child: const Text('OK', style: TextStyle(color: Color(0xFF4F46E5))),
+              style: ElevatedButton.styleFrom(
+                backgroundColor: const Color(0xFF4F46E5),
+                foregroundColor: Colors.white,
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(8)),
+              ),
+              child: const Text('View My QR Code'),
             ),
           ],
         ),

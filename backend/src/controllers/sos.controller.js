@@ -89,6 +89,7 @@ exports.triggerSOS = async (req, res) => {
       userId: user.id,
       userName: user.name || user.fullName || 'Unknown User',
       userRole: user.role,
+      societyId: societyId || 'default-society',
       flatNumber: sosEvent.flatNumber,
       triggeredAt: sosEvent.triggeredAt, // Store exact timestamp used in hash
       latitude: latitude ? String(latitude) : null,
@@ -184,6 +185,7 @@ exports.getSOSEvents = async (req, res) => {
       userId: doc.userId,
       userName: doc.userName,
       userRole: doc.userRole,
+      societyId: doc.societyId,
       flatNumber: doc.flatNumber,
       triggeredAt: doc.triggeredAt || doc.createdAt,
       latitude: doc.latitude,
@@ -678,6 +680,144 @@ exports.getGuardContact = async (req, res) => {
     res.status(500).json({
       status: 'error',
       message: 'Failed to get guard contact',
+      error: error.message
+    });
+  }
+};
+
+// Create dummy SOS for testing
+exports.createDummySOS = async (req, res) => {
+  try {
+    const blockchainService = require('../services/blockchainService');
+    
+    // Get query parameters for customization
+    const emergencyType = req.query.type || 'Fire';
+    const flatNumber = req.query.flat || `A${Math.floor(Math.random() * 100) + 1}`;
+    const societyId = req.query.society || 'SOC-TEST-001';
+    
+    // Generate dummy coordinates (Mumbai area)
+    const latitude = 19.0760 + (Math.random() * 0.05 - 0.025);
+    const longitude = 72.8777 + (Math.random() * 0.05 - 0.025);
+    
+    const sosId = `SOS${Date.now()}${Math.floor(Math.random() * 10000)}`;
+    
+    // Create dummy SOS event
+    const sosEvent = {
+      sosId,
+      triggeredBy: {
+        userId: 'test-user-' + Math.floor(Math.random() * 1000),
+        name: `Test Resident ${Math.floor(Math.random() * 100)}`,
+        email: `test${Math.floor(Math.random() * 10000)}@example.com`,
+        phone: `+91${Math.floor(Math.random() * 9000000000) + 1000000000}`,
+        role: 'resident'
+      },
+      societyId: societyId,
+      flatNumber: flatNumber,
+      location: { 
+        latitude, 
+        longitude,
+        address: `${flatNumber}, Test Society, Mumbai`
+      },
+      locationAddress: `${flatNumber}, Test Society, Mumbai`,
+      description: `${emergencyType}: Test alert for demonstration`,
+      status: 'triggered',
+      priority: 'critical',
+      triggeredAt: new Date()
+    };
+    
+    // Generate blockchain hash
+    const sosDataForHash = {
+      sosId: sosId,
+      userId: sosEvent.triggeredBy.userId,
+      flatNumber: sosEvent.flatNumber,
+      latitude: String(latitude),
+      longitude: String(longitude),
+      description: sosEvent.description,
+      triggeredAt: sosEvent.triggeredAt
+    };
+    
+    const blockchainHash = blockchainService.generateHash(sosDataForHash);
+    console.log('🔐 Blockchain hash generated for test SOS');
+    
+    // Save to MongoDB
+    const savedSOS = await SOSEvent.create({
+      sosId: sosId,
+      userId: sosEvent.triggeredBy.userId,
+      userName: sosEvent.triggeredBy.name,
+      userRole: sosEvent.triggeredBy.role,
+      societyId: societyId,
+      flatNumber: sosEvent.flatNumber,
+      triggeredAt: sosEvent.triggeredAt,
+      latitude: String(latitude),
+      longitude: String(longitude),
+      locationAddress: sosEvent.locationAddress,
+      status: 'active',
+      description: sosEvent.description,
+      blockchainHash: blockchainHash,
+      isSynced: true
+    });
+    console.log('💾 Dummy SOS saved to MongoDB:', sosId);
+    
+    // Add to in-memory cache
+    sosEvent.blockchainHash = blockchainHash;
+    const sosEvents = require('../controllers/sos.controller').sosEvents || [];
+    sosEvents.push(sosEvent);
+    
+    console.warn(`🧪 DUMMY SOS CREATED: ${sosId} - ${emergencyType} at Flat ${flatNumber}`);
+    
+    // Emit via Socket.IO
+    try {
+      const socketService = require('../services/socket.service');
+      socketService.emitSOSAlert(sosEvent);
+      console.log('✅ Dummy SOS broadcasted via Socket.IO');
+    } catch (error) {
+      console.error('❌ Failed to broadcast dummy SOS:', error);
+    }
+    
+    res.status(201).json({
+      status: 'success',
+      message: 'Dummy SOS created successfully',
+      data: { 
+        sosEvent: {
+          sosId: sosId,
+          triggeredBy: sosEvent.triggeredBy,
+          flatNumber: sosEvent.flatNumber,
+          societyId: societyId,
+          description: sosEvent.description,
+          location: sosEvent.location,
+          status: 'active',
+          timestamp: sosEvent.triggeredAt
+        }
+      }
+    });
+    
+  } catch (error) {
+    console.error('Create dummy SOS error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to create dummy SOS',
+      error: error.message
+    });
+  }
+};
+
+// Clear all SOS events (for testing)
+exports.clearAllSOS = async (req, res) => {
+  try {
+    const result = await SOSEvent.deleteMany({});
+    console.log(`🧹 Cleared ${result.deletedCount} SOS events from database`);
+    
+    res.json({
+      status: 'success',
+      message: `Cleared ${result.deletedCount} SOS events`,
+      data: { deletedCount: result.deletedCount }
+    });
+    
+  } catch (error) {
+    console.error('Clear all SOS error:', error);
+    res.status(500).json({
+      status: 'error',
+      message: 'Failed to clear SOS events',
       error: error.message
     });
   }
